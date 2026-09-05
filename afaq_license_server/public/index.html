@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>لوحة إدارة تراخيص آفاق محاسب</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">💼</div>
+                <div>
+                    <h2>آفاق محاسب</h2>
+                    <span class="badge">إدارة التراخيص الويب</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" onclick="switchTab('dashboard', event)">
+                    <span class="icon">📊</span> لوحة الإحصائيات
+                </a>
+                <a href="#" class="nav-item" onclick="switchTab('subscriptions', event)">
+                    <span class="icon">🔑</span> التراخيص والعملاء
+                </a>
+            </nav>
+
+
+            <div class="server-status">
+                <span class="status-dot online"></span>
+                <span>السيرفر يعمل بكفاءة</span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div>
+                    <h1 id="page-title">لوحة التحكم والتراخيص</h1>
+                    <p class="subtitle">إدارة وتفعيل اشتراكات العملاء وفك ربط الأجهزة للأندرويد</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-secondary" onclick="exportCSV()">
+                        <span>📥</span> تصدير Excel (CSV)
+                    </button>
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        <span>➕</span> إضافة ترخيص جديد
+                    </button>
+                </div>
+
+            </header>
+
+            <!-- Stats Overview -->
+            <section class="stats-grid">
+                <div class="stat-card blue">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-info">
+                        <span class="stat-title">إجمالي الاشتراكات</span>
+                        <h3 id="stat-total">0</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card green">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-info">
+                        <span class="stat-title">الاشتراكات النشطة</span>
+                        <h3 id="stat-active">0</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card purple">
+                    <div class="stat-icon">📱</div>
+                    <div class="stat-info">
+                        <span class="stat-title">الأجهزة المربوطة</span>
+                        <h3 id="stat-devices">0</h3>
+                    </div>
+                </div>
+
+                <div class="stat-card red">
+                    <div class="stat-icon">⚠️</div>
+                    <div class="stat-info">
+                        <span class="stat-title">معطلة أو منتهية</span>
+                        <h3 id="stat-expired">0</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Filter & Search Bar -->
+            <section class="action-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="ابحث باسم العميل، الهاتف، أو البريد الإلكتروني..." oninput="filterSubscriptions()">
+                </div>
+
+                <div class="filter-chips">
+                    <button class="chip active" onclick="filterByStatus('ALL', this)">الكل</button>
+                    <button class="chip" onclick="filterByStatus('ACTIVE', this)">النشطة</button>
+                    <button class="chip" onclick="filterByStatus('DISABLED', this)">المعطلة</button>
+                    <button class="chip" onclick="filterByStatus('BOUND', this)">مربوطة بجهاز</button>
+                </div>
+            </section>
+
+            <!-- Subscriptions Table -->
+            <section class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>معرف الترخيص</th>
+                            <th>اسم العميل</th>
+                            <th>البيانات والتواصل</th>
+                            <th>تاريخ الانتهاء</th>
+                            <th>حالة الترخيص</th>
+                            <th>الجهاز المربوط</th>
+                            <th>فترة الأوفلاين</th>
+                            <th>الإجراءات والتحكم</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subscriptions-list">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal: Add New Subscription -->
+    <div id="add-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>إضافة اشتراك جديد للعميل</h3>
+                <button class="close-btn" onclick="closeAddModal()">&times;</button>
+            </div>
+            <form id="add-form" onsubmit="handleCreateSubscription(event)">
+                <div class="form-group">
+                    <label>اسم العميل / المنشأة *</label>
+                    <input type="text" id="cust-name" required placeholder="مثال: شركة الأمل التجارية">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>رقم الهاتف</label>
+                        <input type="text" id="cust-phone" placeholder="مثال: 770000000">
+                    </div>
+                    <div class="form-group">
+                        <label>البريد الإلكتروني</label>
+                        <input type="email" id="cust-email" placeholder="client@example.com">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>خارات المدة السريعة للاشتراك:</label>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetDuration(1, 0)">1 شهر</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetDuration(3, 0)">3 أشهر</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetDuration(6, 0)">6 أشهر</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="setPresetDuration(12, 0)">سنة كاملة (12 شهر)</button>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>مدة الاشتراك (بالأشهر)</label>
+                        <input type="number" id="cust-months" min="0" value="12" placeholder="عدد الأشهر" oninput="calculateCalculatedExpiry()">
+                    </div>
+                    <div class="form-group">
+                        <label>إضافة أيام إضافية</label>
+                        <input type="number" id="cust-days" min="0" value="0" placeholder="عدد الأيام" oninput="calculateCalculatedExpiry()">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>تاريخ الانتهاء المحسوب تلقائياً</label>
+                        <input type="date" id="cust-expiry" required>
+                    </div>
+                    <div class="form-group">
+                        <label>فترة السماح للأوفلاين (أيام) *</label>
+                        <select id="cust-offline">
+                            <option value="7">7 أيام</option>
+                            <option value="15" selected>15 يوماً (قياسي)</option>
+                            <option value="30">30 يوماً</option>
+                            <option value="60">60 يوماً</option>
+                        </select>
+                    </div>
+                </div>
+
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ وتفعيل الاشتراك</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

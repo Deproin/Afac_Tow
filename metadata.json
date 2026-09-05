@@ -1,0 +1,6 @@
+{
+  "name": "آفاق محاسب",
+  "description": "نظام محاسبي متكامل للشركات والمحلات التجارية يعمل بالكامل بدون إنترنت مع مساعد ذكي لتحليل المبيعات والأرباح والمخازن.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

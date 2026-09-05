@@ -1,0 +1,15 @@
+{
+  "subscriptions": [
+    {
+      "id": "SUB-1001",
+      "customerName": "عميل تجريبي ممتاز",
+      "phone": "770000000",
+      "email": "client@afaq.com",
+      "status": "ACTIVE",
+      "expiryDate": "2027-12-31",
+      "deviceId": null,
+      "maxOfflineDays": 15,
+      "createdAt": "2026-07-22T13:23:24.130Z"
+    }
+  ]
+}

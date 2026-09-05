@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Accounting Bank Monument (Gold Accent & White Pillars) -->
+    <!-- Roof Pediment Triangle -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M54,26 L30,40 L78,40 Z" />
+
+    <!-- Architrave Beam -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,41 H78 V44 H30 Z" />
+
+    <!-- 4 Pillars -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,46 H40 V65 H34 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45,46 H51 V65 H45 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57,46 H63 V65 H57 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M68,46 H74 V65 H68 Z" />
+
+    <!-- Monument Base Steps -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,66 H78 V69 H30 Z" />
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M26,70 H82 V74 H26 Z" />
+
+    <!-- Financial Growth Trend Line & Arrow (Green Emerald Gradient/Accent) -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M26,62 L42,48 L54,54 L76,32"
+        android:strokeColor="#00E676"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Arrow Head -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M76,32 L64,33 L75,44 Z" />
+
+</vector>

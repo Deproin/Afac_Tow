@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: afaq-license-server
+    env: node
+    buildCommand: cd afaq_license_server && npm install
+    startCommand: node afaq_license_server/server.js
+    plan: free
+    healthCheckPath: /api/stats

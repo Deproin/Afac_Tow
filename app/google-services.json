@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "742326771964",
+    "project_id": "afaqaccountant",
+    "storage_bucket": "afaqaccountant.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:742326771964:android:03158247c13f56498db779",
+        "android_client_info": {
+          "package_name": "com.aistudio.afaqaccountant.kxmpzq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4RXsG3BEHXNFpCJVkGDVeRrxaiDoYHk0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
