@@ -9,6 +9,19 @@ import retrofit2.http.*
  */
 interface SupabaseApiService {
 
+    // --- Auth ---
+    @POST("auth/v1/signup")
+    suspend fun signUp(
+        @Body request: AuthRequestDto,
+        @Header("apikey") apiKey: String
+    ): Response<AuthResponseDto>
+
+    @POST("auth/v1/token?grant_type=password")
+    suspend fun signIn(
+        @Body request: AuthRequestDto,
+        @Header("apikey") apiKey: String
+    ): Response<AuthResponseDto>
+
     // --- Companies ---
     @GET("rest/v1/companies")
     suspend fun getCompanies(

@@ -834,9 +834,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val workManager = androidx.work.WorkManager.getInstance(getApplication())
         val workTag = "daily_auto_backup_work"
         if (enabled) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+
             val backupWorkRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.util.worker.DailyBackupWorker>(
                 24, java.util.concurrent.TimeUnit.HOURS
-            ).addTag(workTag).build()
+            )
+            .setConstraints(constraints)
+            .addTag(workTag)
+            .build()
 
             workManager.enqueueUniquePeriodicWork(
                 workTag,

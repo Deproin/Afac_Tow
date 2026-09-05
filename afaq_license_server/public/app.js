@@ -1,6 +1,23 @@
 let allSubscriptions = [];
 let currentFilter = 'ALL';
 
+let adminApiKey = localStorage.getItem('adminApiKey') || '';
+function getAuthHeaders() {
+    if (!adminApiKey) {
+        adminApiKey = prompt("يرجى إدخال مفتاح الإدارة (Admin API Key) للسماح بالوصول:") || '';
+        localStorage.setItem('adminApiKey', adminApiKey);
+    }
+    return {
+        'Content-Type': 'application/json',
+        'x-admin-key': adminApiKey
+    };
+}
+function resetAuth() {
+    localStorage.removeItem('adminApiKey');
+    adminApiKey = '';
+    location.reload();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchSubscriptions();
 });
@@ -31,7 +48,8 @@ function switchTab(tabName, event) {
 
 async function fetchSubscriptions() {
     try {
-        const res = await fetch('/api/admin/subscriptions');
+        const res = await fetch('/api/admin/subscriptions', { headers: getAuthHeaders() });
+        if (res.status === 401) { alert("مفتاح الإدارة غير صحيح!"); resetAuth(); return; }
         allSubscriptions = await res.json();
         renderStats();
         renderSubscriptions();
@@ -185,7 +203,7 @@ async function handleCreateSubscription(e) {
     try {
         const res = await fetch('/api/admin/subscriptions/create', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ customerName, phone, email, expiryDate, durationMonths, durationDays, maxOfflineDays })
         });
 
@@ -206,7 +224,7 @@ async function toggleStatus(id) {
     try {
         const res = await fetch('/api/admin/subscriptions/toggle', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id })
         });
         await fetchSubscriptions();
@@ -220,7 +238,7 @@ async function unbindDevice(id) {
     try {
         const res = await fetch('/api/admin/subscriptions/unbind', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id })
         });
         await fetchSubscriptions();
@@ -234,7 +252,7 @@ async function deleteSubscription(id) {
     try {
         await fetch('/api/admin/subscriptions/delete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id })
         });
         await fetchSubscriptions();
@@ -254,7 +272,7 @@ async function renewSubscriptionPrompt(id) {
     try {
         const res = await fetch('/api/admin/subscriptions/renew', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({ id, addMonths })
         });
         const data = await res.json();

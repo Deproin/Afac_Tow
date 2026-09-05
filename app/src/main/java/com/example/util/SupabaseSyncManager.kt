@@ -14,8 +14,12 @@ import java.util.concurrent.TimeUnit
 
 class SupabaseSyncManager(private val context: Context) {
     
-    private var supabaseUrl: String = if (com.example.BuildConfig.SUPABASE_URL.isNotEmpty()) com.example.BuildConfig.SUPABASE_URL else "https://szrvoorbetreklxnbujl.supabase.co"
-    private var supabaseAnonKey: String = if (com.example.BuildConfig.SUPABASE_ANON_KEY.isNotEmpty()) com.example.BuildConfig.SUPABASE_ANON_KEY else "sb_publishable_JzvW3kKPY54uv-BB1VOYSg_oKjZRbSM"
+    private var supabaseUrl: String = com.example.BuildConfig.SUPABASE_URL
+    private var supabaseAnonKey: String = com.example.BuildConfig.SUPABASE_ANON_KEY
+    private var supabaseAccessToken: String = ""
+    private val authHeader: String
+        get() = if (supabaseAccessToken.isNotEmpty()) "Bearer $supabaseAccessToken" else "Bearer $supabaseAnonKey"
+        
     private var companyId: String = "" // This is the Company ID
 
     val isSyncEnabled = MutableStateFlow(false)
@@ -31,7 +35,7 @@ class SupabaseSyncManager(private val context: Context) {
 
     private val safeUrl: String
         get() {
-            val url = if (supabaseUrl.isNotEmpty()) supabaseUrl else "https://szrvoorbetreklxnbujl.supabase.co"
+            val url = supabaseUrl
             return if (url.endsWith("/")) url else "$url/"
         }
 
@@ -62,7 +66,6 @@ class SupabaseSyncManager(private val context: Context) {
             startSyncWorker()
             coroutineScope.launch {
                 try {
-                    val authHeader = "Bearer $supabaseAnonKey"
                     val res = api.getCompanies(supabaseAnonKey, authHeader)
                     if (res.isSuccessful) {
                         syncStatusMessage.value = "متصل بالسحابة 🟢"
@@ -234,7 +237,6 @@ class SupabaseSyncManager(private val context: Context) {
             }
         }
         if (companyId.isEmpty() || companyId == "company-default") return
-        val authHeader = "Bearer $supabaseAnonKey"
 
         // Ensure company exists to avoid foreign key constraint violations
         try {
@@ -366,7 +368,6 @@ class SupabaseSyncManager(private val context: Context) {
      */
     suspend fun downloadAllCompanyData() = withContext(Dispatchers.IO) {
         if (companyId.isEmpty() || supabaseAnonKey.isEmpty()) return@withContext
-        val authHeader = "Bearer $supabaseAnonKey"
 
         try {
             // 1. Users
@@ -378,6 +379,18 @@ class SupabaseSyncManager(private val context: Context) {
                         db.userDao().insertUser(
                             User(
                                 syncId = u.syncId, username = u.username, passwordHash = u.passwordHash,
+                                isSuspended = u.isSuspended, lastLogin = u.lastLogin, operationCount = u.operationCount,
+                                permSale = u.permSale, permPurchase = u.permPurchase, permDeleteInvoice = u.permDeleteInvoice,
+                                permEditInvoice = u.permEditInvoice, permViewProfits = u.permViewProfits, permViewReports = u.permViewReports,
+                                permEditPrices = u.permEditPrices, permBackup = u.permBackup, permSettings = u.permSettings,
+                                permAI = u.permAI, permAccountStatement = u.permAccountStatement, permStocktake = u.permStocktake,
+                                permPrint = u.permPrint, permShare = u.permShare, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.userDao().updateUser(
+                            existing.copy(
+                                syncId = u.syncId, passwordHash = u.passwordHash,
                                 isSuspended = u.isSuspended, lastLogin = u.lastLogin, operationCount = u.operationCount,
                                 permSale = u.permSale, permPurchase = u.permPurchase, permDeleteInvoice = u.permDeleteInvoice,
                                 permEditInvoice = u.permEditInvoice, permViewProfits = u.permViewProfits, permViewReports = u.permViewReports,
@@ -406,6 +419,17 @@ class SupabaseSyncManager(private val context: Context) {
                                 imagePath = item.imagePath, expiryDate = item.expiryDate, syncState = "SYNCED"
                             )
                         )
+                    } else {
+                        db.itemDao().updateItem(
+                            existing.copy(
+                                code = item.code, barcode = item.barcode, name = item.name,
+                                category = item.category, unit = item.unit, brand = item.brand, color = item.color,
+                                size = item.size, location = item.location, minLimit = item.minLimit, maxLimit = item.maxLimit,
+                                purchasePrice = item.purchasePrice, salePrice = item.salePrice, wholesalePrice = item.wholesalePrice,
+                                specialPrice = item.specialPrice, currentQuantity = item.currentQuantity, notes = item.notes,
+                                imagePath = item.imagePath, expiryDate = item.expiryDate, syncState = "SYNCED"
+                            )
+                        )
                     }
                 }
             }
@@ -419,6 +443,14 @@ class SupabaseSyncManager(private val context: Context) {
                         db.contactDao().insertContact(
                             Contact(
                                 syncId = c.syncId, type = c.type, name = c.name, phone = c.phone,
+                                address = c.address, balance = c.balance, creditLimit = c.creditLimit,
+                                notes = c.notes, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.contactDao().updateContact(
+                            existing.copy(
+                                type = c.type, name = c.name, phone = c.phone,
                                 address = c.address, balance = c.balance, creditLimit = c.creditLimit,
                                 notes = c.notes, syncState = "SYNCED"
                             )
@@ -439,6 +471,204 @@ class SupabaseSyncManager(private val context: Context) {
                                 balance = a.balance, syncState = "SYNCED"
                             )
                         )
+                    } else {
+                        db.accountDao().updateAccount(
+                            existing.copy(
+                                code = a.code, name = a.name, type = a.type,
+                                balance = a.balance, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 5. Invoices
+            val invRes = api.getInvoices("eq.$companyId", supabaseAnonKey, authHeader)
+            if (invRes.isSuccessful) {
+                invRes.body()?.forEach { i ->
+                    val existing = syncDao.getInvoiceBySyncId(i.syncId)
+                    if (existing == null) {
+                        db.invoiceDao().insertInvoice(
+                            Invoice(
+                                syncId = i.syncId, invoiceNumber = i.invoiceNumber, type = i.type,
+                                date = i.date, contactId = i.contactId, contactName = i.contactName,
+                                contactType = i.contactType, contactPhone = i.contactPhone,
+                                totalAmount = i.totalAmount, discount = i.discount, tax = i.tax,
+                                netAmount = i.netAmount, paidAmount = i.paidAmount, remainingAmount = i.remainingAmount,
+                                notes = i.notes, paymentMethod = i.paymentMethod, warehouseId = i.warehouseId,
+                                isReturn = i.isReturn, isPosted = i.isPosted, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.invoiceDao().updateInvoice(
+                            existing.copy(
+                                invoiceNumber = i.invoiceNumber, type = i.type,
+                                date = i.date, contactId = i.contactId, contactName = i.contactName,
+                                contactType = i.contactType, contactPhone = i.contactPhone,
+                                totalAmount = i.totalAmount, discount = i.discount, tax = i.tax,
+                                netAmount = i.netAmount, paidAmount = i.paidAmount, remainingAmount = i.remainingAmount,
+                                notes = i.notes, paymentMethod = i.paymentMethod, warehouseId = i.warehouseId,
+                                isReturn = i.isReturn, isPosted = i.isPosted, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 6. Invoice Items
+            val invItemRes = api.getInvoiceItems("eq.$companyId", supabaseAnonKey, authHeader)
+            if (invItemRes.isSuccessful) {
+                invItemRes.body()?.forEach { ii ->
+                    val existing = syncDao.getInvoiceItemBySyncId(ii.syncId)
+                    if (existing == null) {
+                        db.invoiceDao().insertInvoiceItem(
+                            InvoiceItem(
+                                syncId = ii.syncId, invoiceId = ii.invoiceId, itemId = ii.itemId,
+                                itemName = ii.itemName, barcode = ii.barcode, quantity = ii.quantity,
+                                unitPrice = ii.unitPrice, total = ii.total, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.invoiceDao().insertInvoiceItem(
+                            existing.copy(
+                                invoiceId = ii.invoiceId, itemId = ii.itemId,
+                                itemName = ii.itemName, barcode = ii.barcode, quantity = ii.quantity,
+                                unitPrice = ii.unitPrice, total = ii.total, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 7. Cash Transactions
+            val cashRes = api.getCashTransactions("eq.$companyId", supabaseAnonKey, authHeader)
+            if (cashRes.isSuccessful) {
+                cashRes.body()?.forEach { ct ->
+                    val existing = syncDao.getCashTransactionBySyncId(ct.syncId)
+                    if (existing == null) {
+                        db.cashTransactionDao().insertCashTransaction(
+                            CashTransaction(
+                                syncId = ct.syncId, receiptNumber = ct.receiptNumber, type = ct.type,
+                                date = ct.date, amount = ct.amount, contactId = ct.contactId,
+                                contactName = ct.contactName, accountId = ct.accountId, accountName = ct.accountName,
+                                notes = ct.notes, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.cashTransactionDao().updateCashTransaction(
+                            existing.copy(
+                                receiptNumber = ct.receiptNumber, type = ct.type,
+                                date = ct.date, amount = ct.amount, contactId = ct.contactId,
+                                contactName = ct.contactName, accountId = ct.accountId, accountName = ct.accountName,
+                                notes = ct.notes, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 8. Journal Entries
+            val jeRes = api.getJournalEntries("eq.$companyId", supabaseAnonKey, authHeader)
+            if (jeRes.isSuccessful) {
+                jeRes.body()?.forEach { je ->
+                    val existing = syncDao.getJournalEntryBySyncId(je.syncId)
+                    if (existing == null) {
+                        db.journalDao().insertEntry(
+                            JournalEntry(
+                                syncId = je.syncId, entryNumber = je.entryNumber, date = je.date,
+                                description = je.description, totalAmount = je.totalAmount, syncState = "SYNCED",
+                                referenceId = je.referenceId, referenceType = je.referenceType, currencyCode = je.currencyCode
+                            )
+                        )
+                    } else {
+                        db.journalDao().updateEntry(
+                            existing.copy(
+                                entryNumber = je.entryNumber, date = je.date,
+                                description = je.description, totalAmount = je.totalAmount, syncState = "SYNCED",
+                                referenceId = je.referenceId, referenceType = je.referenceType, currencyCode = je.currencyCode
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 9. Journal Entry Lines
+            val jelRes = api.getJournalEntryLines("eq.$companyId", supabaseAnonKey, authHeader)
+            if (jelRes.isSuccessful) {
+                jelRes.body()?.forEach { jel ->
+                    val existing = syncDao.getJournalEntryLineBySyncId(jel.syncId)
+                    if (existing == null) {
+                        db.journalDao().insertEntryLine(
+                            JournalEntryLine(
+                                syncId = jel.syncId, journalEntryId = jel.journalEntryId,
+                                accountId = jel.accountId, accountName = jel.accountName,
+                                debit = jel.debit, credit = jel.credit, description = jel.description, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.journalDao().insertEntryLine(
+                            existing.copy(
+                                journalEntryId = jel.journalEntryId,
+                                accountId = jel.accountId, accountName = jel.accountName,
+                                debit = jel.debit, credit = jel.credit, description = jel.description, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 10. Enterprise Settings
+            val esRes = api.getEnterpriseSettings("eq.$companyId", supabaseAnonKey, authHeader)
+            if (esRes.isSuccessful) {
+                esRes.body()?.firstOrNull()?.let { es ->
+                    val existing = db.enterpriseSettingDao().getSettingsDirect()
+                    if (existing == null) {
+                        db.enterpriseSettingDao().insertSettings(
+                            EnterpriseSetting(
+                                id = 1, syncId = es.syncId, name = es.name, activityType = es.activityType,
+                                address = es.address, phone1 = es.phone1, phone2 = es.phone2,
+                                taxNumber = es.taxNumber, commercialRecord = es.commercialRecord,
+                                taxRate = es.taxRate, isTaxInclusive = es.isTaxInclusive,
+                                isSalesInvoiceDirectPrint = es.isSalesInvoiceDirectPrint,
+                                currency = es.currency, notes = es.notes, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.enterpriseSettingDao().insertSettings(
+                            existing.copy(
+                                syncId = es.syncId, name = es.name, activityType = es.activityType,
+                                address = es.address, phone1 = es.phone1, phone2 = es.phone2,
+                                taxNumber = es.taxNumber, commercialRecord = es.commercialRecord,
+                                taxRate = es.taxRate, isTaxInclusive = es.isTaxInclusive,
+                                isSalesInvoiceDirectPrint = es.isSalesInvoiceDirectPrint,
+                                currency = es.currency, notes = es.notes, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 11. Item Units
+            val iuRes = api.getItemUnits("eq.$companyId", supabaseAnonKey, authHeader)
+            if (iuRes.isSuccessful) {
+                iuRes.body()?.forEach { iu ->
+                    val existing = syncDao.getItemUnitBySyncId(iu.syncId)
+                    if (existing == null) {
+                        db.itemUnitDao().insertItemUnit(
+                            ItemUnit(
+                                syncId = iu.syncId, itemId = iu.itemId, unitName = iu.unitName,
+                                conversionFactor = iu.conversionFactor, barcode = iu.barcode,
+                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED"
+                            )
+                        )
+                    } else {
+                        db.itemUnitDao().updateItemUnit(
+                            existing.copy(
+                                itemId = iu.itemId, unitName = iu.unitName,
+                                conversionFactor = iu.conversionFactor, barcode = iu.barcode,
+                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED"
+                            )
+                        )
                     }
                 }
             }
@@ -453,8 +683,7 @@ class SupabaseSyncManager(private val context: Context) {
      * Verifies employee login against Supabase company data, sets companyId, and pulls all data.
      */
     suspend fun verifyAndDownloadCompanyData(companyName: String, username: String, passHash: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-        val safeKey = if (supabaseAnonKey.isNotEmpty()) supabaseAnonKey else "sb_publishable_JzvW3kKPY54uv-BB1VOYSg_oKjZRbSM"
-        val authHeader = "Bearer $safeKey"
+        val safeKey = supabaseAnonKey
 
         try {
             // 1. Check companies table
@@ -517,6 +746,30 @@ class SupabaseSyncManager(private val context: Context) {
                 val licenseManager = LicenseManager(context)
                 licenseManager.setCompanySyncCode(companyId)
 
+                // --- SUPABASE AUTH INTEGRATION (FOR RLS) ---
+                try {
+                    val cleanUsername = matchedUser.username.trim().lowercase().replace(Regex("[^a-z0-9]"), "")
+                    val cleanCompId = targetCompanyId.lowercase().replace(Regex("[^a-z0-9]"), "")
+                    val authEmail = "${cleanUsername}@${cleanCompId}.afac"
+                    val authPass = "AfacAuth123!_${cleanUsername}"
+                    
+                    val authReq = AuthRequestDto(email = authEmail, password = authPass)
+                    var authRes = api.signIn(authReq, safeKey)
+                    if (!authRes.isSuccessful) {
+                        authRes = api.signUp(authReq, safeKey)
+                    }
+                    
+                    if (authRes.isSuccessful && authRes.body()?.accessToken != null) {
+                        supabaseAccessToken = authRes.body()!!.accessToken!!
+                        Log.d("SupabaseSync", "Successfully authenticated with Supabase Auth JWT!")
+                    } else {
+                        Log.e("SupabaseSync", "Failed Supabase Auth: ${authRes.errorBody()?.string()}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("SupabaseSync", "Auth Error: ${e.message}")
+                }
+                // -------------------------------------------
+
                 // Also save or update user locally so Room login succeeds 100%
                 val allUsers = db.userDao().getAllUsers().firstOrNull() ?: emptyList()
                 val existing = allUsers.find { it.username.trim().equals(matchedUser.username.trim(), ignoreCase = true) }
@@ -566,7 +819,6 @@ class SupabaseSyncManager(private val context: Context) {
     }
 
     suspend fun deleteItemCloud(syncId: String) = withContext(Dispatchers.IO) {
-        val authHeader = "Bearer $supabaseAnonKey"
         try {
             api.deleteItem("eq.$syncId", supabaseAnonKey, authHeader)
             Log.d("SupabaseSync", "Successfully deleted item $syncId from cloud")
@@ -576,7 +828,6 @@ class SupabaseSyncManager(private val context: Context) {
     }
 
     suspend fun deleteContactCloud(syncId: String) = withContext(Dispatchers.IO) {
-        val authHeader = "Bearer $supabaseAnonKey"
         try {
             api.deleteContact("eq.$syncId", supabaseAnonKey, authHeader)
             Log.d("SupabaseSync", "Successfully deleted contact $syncId from cloud")
@@ -586,7 +837,6 @@ class SupabaseSyncManager(private val context: Context) {
     }
 
     suspend fun deleteUserCloud(syncId: String) = withContext(Dispatchers.IO) {
-        val authHeader = "Bearer $supabaseAnonKey"
         try {
             api.deleteUser("eq.$syncId", supabaseAnonKey, authHeader)
             Log.d("SupabaseSync", "Successfully deleted user $syncId from cloud")
@@ -596,7 +846,6 @@ class SupabaseSyncManager(private val context: Context) {
     }
 
     suspend fun deleteInvoiceCloud(syncId: String) = withContext(Dispatchers.IO) {
-        val authHeader = "Bearer $supabaseAnonKey"
         try {
             api.deleteInvoice("eq.$syncId", supabaseAnonKey, authHeader)
             Log.d("SupabaseSync", "Successfully deleted invoice $syncId from cloud")

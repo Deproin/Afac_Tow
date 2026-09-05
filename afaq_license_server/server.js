@@ -239,6 +239,14 @@ const server = http.createServer(async (req, res) => {
 
         try {
             // ================= API ROUTING =================
+            if (pathname.startsWith('/api/admin/')) {
+                const clientKey = req.headers['x-admin-key'];
+                const serverKey = process.env.ADMIN_API_KEY || 'afaq-admin-12345'; // Change this in production
+                if (!clientKey || clientKey !== serverKey) {
+                    return sendJSON(res, 401, { success: false, message: "Unauthorized: Invalid Admin API Key." });
+                }
+            }
+
             if (pathname === '/api/stats' && req.method === 'GET') {
                 const subs = await getAllSubscriptions();
                 return sendJSON(res, 200, { success: true, count: subs.length, dbType: pool ? 'Neon PostgreSQL' : 'Local JSON' });
