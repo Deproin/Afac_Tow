@@ -487,28 +487,28 @@ class SupabaseSyncManager(private val context: Context) {
             if (invRes.isSuccessful) {
                 invRes.body()?.forEach { i ->
                     val existing = syncDao.getInvoiceBySyncId(i.syncId)
+                    val localContactId = i.contactSyncId?.let { syncDao.getContactBySyncId(it)?.id }
+                    val localUserId = i.userSyncId?.let { syncDao.getUserBySyncId(it)?.id } ?: 1L
                     if (existing == null) {
                         db.invoiceDao().insertInvoice(
                             Invoice(
                                 syncId = i.syncId, invoiceNumber = i.invoiceNumber, type = i.type,
-                                date = i.date, contactId = i.contactId, contactName = i.contactName,
-                                contactType = i.contactType, contactPhone = i.contactPhone,
-                                totalAmount = i.totalAmount, discount = i.discount, tax = i.tax,
-                                netAmount = i.netAmount, paidAmount = i.paidAmount, remainingAmount = i.remainingAmount,
-                                notes = i.notes, paymentMethod = i.paymentMethod, warehouseId = i.warehouseId,
-                                isReturn = i.isReturn, isPosted = i.isPosted, syncState = "SYNCED"
+                                contactId = localContactId, timestamp = i.timestamp, subTotal = i.subTotal,
+                                discount = i.discount, tax = i.tax, total = i.total, paidAmount = i.paidAmount,
+                                remainingAmount = i.remainingAmount, paymentMethod = i.paymentMethod,
+                                notes = i.notes, userId = localUserId, currencyCode = i.currencyCode,
+                                exchangeRate = i.exchangeRate, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
                             )
                         )
                     } else {
                         db.invoiceDao().updateInvoice(
                             existing.copy(
-                                invoiceNumber = i.invoiceNumber, type = i.type,
-                                date = i.date, contactId = i.contactId, contactName = i.contactName,
-                                contactType = i.contactType, contactPhone = i.contactPhone,
-                                totalAmount = i.totalAmount, discount = i.discount, tax = i.tax,
-                                netAmount = i.netAmount, paidAmount = i.paidAmount, remainingAmount = i.remainingAmount,
-                                notes = i.notes, paymentMethod = i.paymentMethod, warehouseId = i.warehouseId,
-                                isReturn = i.isReturn, isPosted = i.isPosted, syncState = "SYNCED"
+                                invoiceNumber = i.invoiceNumber, type = i.type, contactId = localContactId,
+                                timestamp = i.timestamp, subTotal = i.subTotal, discount = i.discount,
+                                tax = i.tax, total = i.total, paidAmount = i.paidAmount,
+                                remainingAmount = i.remainingAmount, paymentMethod = i.paymentMethod,
+                                notes = i.notes, userId = localUserId, currencyCode = i.currencyCode,
+                                exchangeRate = i.exchangeRate, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
                             )
                         )
                     }
@@ -520,20 +520,24 @@ class SupabaseSyncManager(private val context: Context) {
             if (invItemRes.isSuccessful) {
                 invItemRes.body()?.forEach { ii ->
                     val existing = syncDao.getInvoiceItemBySyncId(ii.syncId)
+                    val localInvId = ii.invoiceSyncId?.let { syncDao.getInvoiceBySyncId(it)?.id } ?: return@forEach
+                    val localItemId = ii.itemSyncId?.let { syncDao.getItemBySyncId(it)?.id } ?: return@forEach
                     if (existing == null) {
                         db.invoiceDao().insertInvoiceItem(
                             InvoiceItem(
-                                syncId = ii.syncId, invoiceId = ii.invoiceId, itemId = ii.itemId,
-                                itemName = ii.itemName, barcode = ii.barcode, quantity = ii.quantity,
-                                unitPrice = ii.unitPrice, total = ii.total, syncState = "SYNCED"
+                                syncId = ii.syncId, invoiceId = localInvId, itemId = localItemId,
+                                quantity = ii.quantity, unitPrice = ii.unitPrice, discount = ii.discount,
+                                total = ii.total, unitName = ii.unitName, conversionFactor = ii.conversionFactor,
+                                syncState = "SYNCED", updatedAt = ii.updatedAt, isDeleted = ii.isDeleted
                             )
                         )
                     } else {
                         db.invoiceDao().insertInvoiceItem(
                             existing.copy(
-                                invoiceId = ii.invoiceId, itemId = ii.itemId,
-                                itemName = ii.itemName, barcode = ii.barcode, quantity = ii.quantity,
-                                unitPrice = ii.unitPrice, total = ii.total, syncState = "SYNCED"
+                                invoiceId = localInvId, itemId = localItemId,
+                                quantity = ii.quantity, unitPrice = ii.unitPrice, discount = ii.discount,
+                                total = ii.total, unitName = ii.unitName, conversionFactor = ii.conversionFactor,
+                                syncState = "SYNCED", updatedAt = ii.updatedAt, isDeleted = ii.isDeleted
                             )
                         )
                     }
@@ -545,22 +549,27 @@ class SupabaseSyncManager(private val context: Context) {
             if (cashRes.isSuccessful) {
                 cashRes.body()?.forEach { ct ->
                     val existing = syncDao.getCashTransactionBySyncId(ct.syncId)
+                    val localAccId = ct.accountSyncId?.let { syncDao.getAccountBySyncId(it)?.id } ?: return@forEach
+                    val localCounterAccId = ct.counterpartAccountSyncId?.let { syncDao.getAccountBySyncId(it)?.id }
                     if (existing == null) {
                         db.cashTransactionDao().insertCashTransaction(
                             CashTransaction(
-                                syncId = ct.syncId, receiptNumber = ct.receiptNumber, type = ct.type,
-                                date = ct.date, amount = ct.amount, contactId = ct.contactId,
-                                contactName = ct.contactName, accountId = ct.accountId, accountName = ct.accountName,
-                                notes = ct.notes, syncState = "SYNCED"
+                                syncId = ct.syncId, type = ct.type, accountId = localAccId,
+                                counterpartAccountId = localCounterAccId, amount = ct.amount,
+                                timestamp = ct.timestamp, notes = ct.notes, mainAccountNotes = ct.mainAccountNotes,
+                                counterpartAccountNotes = ct.counterpartAccountNotes, referenceType = ct.referenceType,
+                                referenceId = null, currencyCode = ct.currencyCode, exchangeRate = ct.exchangeRate,
+                                syncState = "SYNCED", updatedAt = ct.updatedAt, isDeleted = ct.isDeleted
                             )
                         )
                     } else {
                         db.cashTransactionDao().updateCashTransaction(
                             existing.copy(
-                                receiptNumber = ct.receiptNumber, type = ct.type,
-                                date = ct.date, amount = ct.amount, contactId = ct.contactId,
-                                contactName = ct.contactName, accountId = ct.accountId, accountName = ct.accountName,
-                                notes = ct.notes, syncState = "SYNCED"
+                                type = ct.type, accountId = localAccId, counterpartAccountId = localCounterAccId,
+                                amount = ct.amount, timestamp = ct.timestamp, notes = ct.notes,
+                                mainAccountNotes = ct.mainAccountNotes, counterpartAccountNotes = ct.counterpartAccountNotes,
+                                referenceType = ct.referenceType, referenceId = null, currencyCode = ct.currencyCode,
+                                exchangeRate = ct.exchangeRate, syncState = "SYNCED", updatedAt = ct.updatedAt, isDeleted = ct.isDeleted
                             )
                         )
                     }
@@ -575,17 +584,19 @@ class SupabaseSyncManager(private val context: Context) {
                     if (existing == null) {
                         db.journalDao().insertEntry(
                             JournalEntry(
-                                syncId = je.syncId, entryNumber = je.entryNumber, date = je.date,
-                                description = je.description, totalAmount = je.totalAmount, syncState = "SYNCED",
-                                referenceId = je.referenceId, referenceType = je.referenceType, currencyCode = je.currencyCode
+                                syncId = je.syncId, entryNumber = je.entryNumber, timestamp = je.timestamp,
+                                description = je.description, isPosted = je.isPosted, referenceId = null,
+                                referenceType = je.referenceType, currencyCode = je.currencyCode, exchangeRate = je.exchangeRate,
+                                syncState = "SYNCED", updatedAt = je.updatedAt, isDeleted = je.isDeleted
                             )
                         )
                     } else {
                         db.journalDao().updateEntry(
                             existing.copy(
-                                entryNumber = je.entryNumber, date = je.date,
-                                description = je.description, totalAmount = je.totalAmount, syncState = "SYNCED",
-                                referenceId = je.referenceId, referenceType = je.referenceType, currencyCode = je.currencyCode
+                                entryNumber = je.entryNumber, timestamp = je.timestamp, description = je.description,
+                                isPosted = je.isPosted, referenceId = null, referenceType = je.referenceType,
+                                currencyCode = je.currencyCode, exchangeRate = je.exchangeRate,
+                                syncState = "SYNCED", updatedAt = je.updatedAt, isDeleted = je.isDeleted
                             )
                         )
                     }
@@ -597,20 +608,22 @@ class SupabaseSyncManager(private val context: Context) {
             if (jelRes.isSuccessful) {
                 jelRes.body()?.forEach { jel ->
                     val existing = syncDao.getJournalEntryLineBySyncId(jel.syncId)
+                    val localJEId = jel.journalEntrySyncId?.let { syncDao.getJournalEntryBySyncId(it)?.id } ?: return@forEach
+                    val localAccId = jel.accountSyncId?.let { syncDao.getAccountBySyncId(it)?.id } ?: return@forEach
                     if (existing == null) {
                         db.journalDao().insertEntryLine(
                             JournalEntryLine(
-                                syncId = jel.syncId, journalEntryId = jel.journalEntryId,
-                                accountId = jel.accountId, accountName = jel.accountName,
-                                debit = jel.debit, credit = jel.credit, description = jel.description, syncState = "SYNCED"
+                                syncId = jel.syncId, journalEntryId = localJEId, accountId = localAccId,
+                                debit = jel.debit, credit = jel.credit, description = jel.description,
+                                syncState = "SYNCED", updatedAt = jel.updatedAt, isDeleted = jel.isDeleted
                             )
                         )
                     } else {
                         db.journalDao().insertEntryLine(
                             existing.copy(
-                                journalEntryId = jel.journalEntryId,
-                                accountId = jel.accountId, accountName = jel.accountName,
-                                debit = jel.debit, credit = jel.credit, description = jel.description, syncState = "SYNCED"
+                                journalEntryId = localJEId, accountId = localAccId,
+                                debit = jel.debit, credit = jel.credit, description = jel.description,
+                                syncState = "SYNCED", updatedAt = jel.updatedAt, isDeleted = jel.isDeleted
                             )
                         )
                     }
@@ -625,23 +638,23 @@ class SupabaseSyncManager(private val context: Context) {
                     if (existing == null) {
                         db.enterpriseSettingDao().insertSettings(
                             EnterpriseSetting(
-                                id = 1, syncId = es.syncId, name = es.name, activityType = es.activityType,
-                                address = es.address, phone1 = es.phone1, phone2 = es.phone2,
-                                taxNumber = es.taxNumber, commercialRecord = es.commercialRecord,
-                                taxRate = es.taxRate, isTaxInclusive = es.isTaxInclusive,
-                                isSalesInvoiceDirectPrint = es.isSalesInvoiceDirectPrint,
-                                currency = es.currency, notes = es.notes, syncState = "SYNCED"
+                                id = 1, syncState = "SYNCED", name = es.name, activity = es.activity,
+                                address = es.address, phone = es.phone, whatsapp = es.whatsapp,
+                                email = es.email, website = es.website, taxId = es.taxId,
+                                crId = es.crId, currency = es.currency, decimalPlaces = es.decimalPlaces,
+                                invoiceFooter = es.invoiceFooter, allowSellBelowCost = es.allowSellBelowCost,
+                                allowNegativeStock = es.allowNegativeStock, updatedAt = es.updatedAt, isDeleted = es.isDeleted
                             )
                         )
                     } else {
                         db.enterpriseSettingDao().insertSettings(
                             existing.copy(
-                                syncId = es.syncId, name = es.name, activityType = es.activityType,
-                                address = es.address, phone1 = es.phone1, phone2 = es.phone2,
-                                taxNumber = es.taxNumber, commercialRecord = es.commercialRecord,
-                                taxRate = es.taxRate, isTaxInclusive = es.isTaxInclusive,
-                                isSalesInvoiceDirectPrint = es.isSalesInvoiceDirectPrint,
-                                currency = es.currency, notes = es.notes, syncState = "SYNCED"
+                                syncState = "SYNCED", name = es.name, activity = es.activity,
+                                address = es.address, phone = es.phone, whatsapp = es.whatsapp,
+                                email = es.email, website = es.website, taxId = es.taxId,
+                                crId = es.crId, currency = es.currency, decimalPlaces = es.decimalPlaces,
+                                invoiceFooter = es.invoiceFooter, allowSellBelowCost = es.allowSellBelowCost,
+                                allowNegativeStock = es.allowNegativeStock, updatedAt = es.updatedAt, isDeleted = es.isDeleted
                             )
                         )
                     }
@@ -653,20 +666,23 @@ class SupabaseSyncManager(private val context: Context) {
             if (iuRes.isSuccessful) {
                 iuRes.body()?.forEach { iu ->
                     val existing = syncDao.getItemUnitBySyncId(iu.syncId)
+                    val localItemId = iu.itemSyncId?.let { syncDao.getItemBySyncId(it)?.id } ?: return@forEach
                     if (existing == null) {
                         db.itemUnitDao().insertItemUnit(
                             ItemUnit(
-                                syncId = iu.syncId, itemId = iu.itemId, unitName = iu.unitName,
+                                syncId = iu.syncId, itemId = localItemId, unitName = iu.unitName,
                                 conversionFactor = iu.conversionFactor, barcode = iu.barcode,
-                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED"
+                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED",
+                                updatedAt = iu.updatedAt, isDeleted = iu.isDeleted
                             )
                         )
                     } else {
                         db.itemUnitDao().updateItemUnit(
                             existing.copy(
-                                itemId = iu.itemId, unitName = iu.unitName,
+                                itemId = localItemId, unitName = iu.unitName,
                                 conversionFactor = iu.conversionFactor, barcode = iu.barcode,
-                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED"
+                                purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED",
+                                updatedAt = iu.updatedAt, isDeleted = iu.isDeleted
                             )
                         )
                     }
