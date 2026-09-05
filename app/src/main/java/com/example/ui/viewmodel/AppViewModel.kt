@@ -7,12 +7,6 @@ import com.example.api.GeminiHelper
 import com.example.data.model.*
 import com.example.data.repository.AppRepository
 
-data class StockSupplyEntry(
-    val itemId: Long,
-    val quantity: Double,
-    val unitCostInCurrency: Double,
-    val expiryDate: String
-)
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
@@ -20,7 +14,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
-
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -56,14 +49,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val firestoreSyncManager = com.example.util.FirestoreSyncManager(application)
     val supabaseSyncManager = com.example.util.SupabaseSyncManager(application)
 
-    val users = repository.userDao.getAllUsers()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        
-    val warehouses = repository.warehouseDao.getAllWarehouses()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-        
-    val accounts = repository.accountDao.getAllAccounts()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -196,6 +182,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
 
     // Database flows converted to StateFlows for Compose
+    val users = repository.userDao.getAllUsers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val items = repository.itemDao.getAllItems()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -767,66 +756,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         repository.logOperation("حذف مستودع", "warehouses", "تم حذف المستودع ${w.name}")
     }
 
-    fun transferStock(from: Long, to: Long, itemId: Long, qty: Double, notes: String) = viewModelScope.launch {
-        val transfer = StockTransfer(itemId = itemId, fromWarehouseId = from, toWarehouseId = to, quantity = qty, notes = notes)
-        repository.stockTransferDao.insertTransfer(transfer)
-        repository.logOperation("تحويل مخزني", "stock_transfers", "تم تحويل كمية $qty من المستودع $from إلى $to")
-    }
-
-    fun supplyStock(itemId: Long, warehouseId: Long, quantity: Double, unitCost: Double, notes: String) = viewModelScope.launch(Dispatchers.IO) {
-        val targetItem = repository.itemDao.getItemById(itemId) ?: return@launch
-        val updatedPrice = if (unitCost > 0) unitCost else targetItem.purchasePrice
-        val updatedItem = targetItem.copy(
-            currentQuantity = targetItem.currentQuantity + quantity,
-            purchasePrice = updatedPrice
-        )
-        repository.itemDao.updateItem(updatedItem)
-        val transfer = StockTransfer(
-            itemId = itemId,
-            fromWarehouseId = 0L,
-            toWarehouseId = warehouseId,
-            quantity = quantity,
-            notes = if (notes.isNotEmpty()) "توريد مخزني: $notes" else "توريد مخزني بسعر $updatedPrice"
-        )
-        repository.stockTransferDao.insertTransfer(transfer)
-        repository.logOperation("توريد مخزني", "items", "تم توريد كمية $quantity للصنف ${targetItem.name}")
-        firestoreSyncManager.pushItem(updatedItem)
-    }
-
-    fun supplyStockMulti(
-        entries: List<StockSupplyEntry>,
-        warehouseId: Long,
-        currencyCode: String,
-        exchangeRate: Double,
-        generalNotes: String
-    ) = viewModelScope.launch(Dispatchers.IO) {
-        for (entry in entries) {
-            val targetItem = repository.itemDao.getItemById(entry.itemId) ?: continue
-            val costInBase = if (entry.unitCostInCurrency > 0) entry.unitCostInCurrency * exchangeRate else targetItem.purchasePrice
-
-            val updatedItem = targetItem.copy(
-                currentQuantity = targetItem.currentQuantity + entry.quantity,
-                purchasePrice = if (costInBase > 0) costInBase else targetItem.purchasePrice,
-                expiryDate = if (entry.expiryDate.isNotBlank()) entry.expiryDate else targetItem.expiryDate
-            )
-            repository.itemDao.updateItem(updatedItem)
-
-            val itemNote = "سند توريد مخزني ($currencyCode): سعر الوحدة ${entry.unitCostInCurrency}" +
-                (if (entry.expiryDate.isNotBlank()) " | انتهاء: ${entry.expiryDate}" else "") +
-                (if (generalNotes.isNotBlank()) " | $generalNotes" else "")
-
-            val transfer = StockTransfer(
-                itemId = entry.itemId,
-                fromWarehouseId = 0L,
-                toWarehouseId = warehouseId,
-                quantity = entry.quantity,
-                notes = itemNote
-            )
-            repository.stockTransferDao.insertTransfer(transfer)
-            repository.logOperation("سند توريد مخزني", "items", "تم توريد كمية ${entry.quantity} للصنف ${targetItem.name} بـ $currencyCode")
-            firestoreSyncManager.pushItem(updatedItem)
-        }
-    }
 
     // --- Contact Management ---
     fun addContact(c: Contact) = viewModelScope.launch {

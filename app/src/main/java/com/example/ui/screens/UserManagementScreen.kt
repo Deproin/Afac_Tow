@@ -501,7 +501,6 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                             )
                             selectedUserForEdit = null
                         }
-                        }
                     ) {
                         Text("حفظ وتحديث الصلاحيات", color = Color.White, fontWeight = FontWeight.Bold)
                     }
@@ -545,10 +544,7 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 }
             )
         }
-    }
 }
-}
-
 
 @Composable
 fun UserListItem(
