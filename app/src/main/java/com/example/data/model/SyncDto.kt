@@ -38,6 +38,8 @@ data class UserDto(
     @Json(name = "permstocktake") val permStocktake: Boolean = true,
     @Json(name = "permprint") val permPrint: Boolean = true,
     @Json(name = "permshare") val permShare: Boolean = true,
+    @Json(name = "defaultwarehousesyncid") val defaultWarehouseSyncId: String? = null,
+    @Json(name = "defaultsafeaccountsyncid") val defaultSafeAccountSyncId: String? = null,
     @Json(name = "syncstate") val syncState: String = "SYNCED",
     @Json(name = "updatedat") val updatedAt: Long = 0,
     @Json(name = "isdeleted") val isDeleted: Boolean = false
@@ -121,6 +123,7 @@ data class InvoiceDto(
     @Json(name = "usersyncid") val userSyncId: String? = null,
     @Json(name = "currencycode") val currencyCode: String = "ر.ي",
     @Json(name = "exchangerate") val exchangeRate: Double = 1.0,
+    @Json(name = "warehousesyncid") val warehouseSyncId: String? = null,
     @Json(name = "syncstate") val syncState: String = "SYNCED",
     @Json(name = "updatedat") val updatedAt: Long = 0,
     @Json(name = "isdeleted") val isDeleted: Boolean = false
@@ -227,6 +230,18 @@ data class EnterpriseSettingDto(
     @Json(name = "invoicefooter") val invoiceFooter: String = "",
     @Json(name = "allowsellbelowcost") val allowSellBelowCost: Boolean = false,
     @Json(name = "allownegativestock") val allowNegativeStock: Boolean = false,
+    @Json(name = "syncstate") val syncState: String = "SYNCED",
+    @Json(name = "updatedat") val updatedAt: Long = 0,
+    @Json(name = "isdeleted") val isDeleted: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
+data class ItemStockDto(
+    @Json(name = "syncid") val syncId: String = "",
+    @Json(name = "company_id") val companyId: String = "",
+    @Json(name = "itemsyncid") val itemSyncId: String? = null,
+    @Json(name = "warehousesyncid") val warehouseSyncId: String? = null,
+    @Json(name = "quantity") val quantity: Double = 0.0,
     @Json(name = "syncstate") val syncState: String = "SYNCED",
     @Json(name = "updatedat") val updatedAt: Long = 0,
     @Json(name = "isdeleted") val isDeleted: Boolean = false

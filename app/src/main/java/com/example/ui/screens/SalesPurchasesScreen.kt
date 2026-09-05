@@ -61,16 +61,34 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
     val currencies by viewModel.currencies.collectAsState(initial = emptyList())
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val warehouses by viewModel.warehouses.collectAsState()
+    var selectedWarehouse by remember { mutableStateOf<com.example.data.model.Warehouse?>(null) }
     var selectedAccount by remember { mutableStateOf<Account?>(null) }
+
+    val currentUser by viewModel.currentUser.collectAsState()
 
     val cashAndBankAccounts = remember(accounts) {
         accounts.filter {
             it.type == "ASSETS" && (it.name.contains("الصندوق") || it.name.contains("البنك") || it.name.contains("خزينة") || it.code == "1101" || it.code == "1102")
         }
     }
-    LaunchedEffect(cashAndBankAccounts) {
-        if (selectedAccount == null && cashAndBankAccounts.isNotEmpty()) {
-            selectedAccount = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.firstOrNull()
+    LaunchedEffect(cashAndBankAccounts, currentUser) {
+        if (cashAndBankAccounts.isNotEmpty()) {
+            if (currentUser?.defaultSafeAccountId != null) {
+                selectedAccount = cashAndBankAccounts.find { it.id == currentUser?.defaultSafeAccountId }
+            } else if (selectedAccount == null) {
+                selectedAccount = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.firstOrNull()
+            }
+        }
+    }
+
+    LaunchedEffect(warehouses, currentUser) {
+        if (warehouses.isNotEmpty()) {
+            if (currentUser?.defaultWarehouseId != null) {
+                selectedWarehouse = warehouses.find { it.id == currentUser?.defaultWarehouseId }
+            } else if (selectedWarehouse == null) {
+                selectedWarehouse = warehouses.firstOrNull { it.name == "المستودع الرئيسي" } ?: warehouses.firstOrNull()
+            }
         }
     }
 
@@ -551,6 +569,68 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                         }
                     }
 
+                    // Warehouse Selector
+                    var expandedWarehouseDropdown by remember { mutableStateOf(false) }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (isReturn && mode == "SALE_RETURN") "المستودع المرتجع إليه" else "المستودع المستهدف للمخزون", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text("*", color = Color.Red, fontWeight = FontWeight.Bold)
+                            }
+                            if (selectedWarehouse != null) {
+                                Text(selectedWarehouse!!.name, fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Box {
+                            OutlinedButton(
+                                onClick = {
+                                    if (currentUser?.defaultWarehouseId == null) {
+                                        expandedWarehouseDropdown = true
+                                    } else {
+                                        Toast.makeText(context, "أنت مقيد بمستودع محدد مسبقاً", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(selectedWarehouse?.name ?: "اختر المستودع...", fontSize = 12.sp)
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Dropdown")
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = expandedWarehouseDropdown,
+                                onDismissRequest = { expandedWarehouseDropdown = false },
+                                modifier = Modifier.fillMaxWidth(0.9f)
+                            ) {
+                                if (warehouses.isEmpty()) {
+                                    DropdownMenuItem(text = { Text("لا توجد مستودعات مضافة", fontSize = 11.sp, color = Color.Gray) }, onClick = {})
+                                } else {
+                                    warehouses.forEach { wh ->
+                                        DropdownMenuItem(
+                                            text = { Text(wh.name, fontWeight = FontWeight.Bold) },
+                                            onClick = {
+                                                selectedWarehouse = wh
+                                                expandedWarehouseDropdown = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Account Selector (الصندوق / البنك)
                     if (paymentMethod == "نقدي" || paymentMethod == "شبكة") {
                         var expandedAccountsDropdown by remember { mutableStateOf(false) }
@@ -571,7 +651,13 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
 
                             Box {
                                 OutlinedButton(
-                                    onClick = { expandedAccountsDropdown = true },
+                                    onClick = {
+                                        if (currentUser?.defaultSafeAccountId == null) {
+                                            expandedAccountsDropdown = true
+                                        } else {
+                                            Toast.makeText(context, "لا يمكنك تغيير الصندوق، أنت مقيد بصندوق محدد مسبقاً", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                                     border = BorderStroke(1.dp, if (selectedAccount == null) Color.Red else MaterialTheme.colorScheme.outline)
@@ -582,7 +668,11 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(selectedAccount?.name ?: "اختر حساب الصندوق أو البنك")
-                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                        if (currentUser?.defaultSafeAccountId == null) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                        } else {
+                                            Icon(Icons.Default.Lock, contentDescription = "مقفل")
+                                        }
                                     }
                                 }
 
@@ -1482,7 +1572,8 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                         notes = notesText,
                         userId = 1,
                         currencyCode = selectedCurrencyCode,
-                        exchangeRate = exchangeRateInput.toDoubleOrNull() ?: 1.0
+                        exchangeRate = exchangeRateInput.toDoubleOrNull() ?: 1.0,
+                        warehouseId = selectedWarehouse?.id
                     )
                     if (editingInvoice != null) {
                         val updatedInvoiceObj = invoice.copy(

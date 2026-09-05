@@ -22,6 +22,14 @@ interface SyncDao {
     @Query("SELECT * FROM items WHERE syncId = :syncId LIMIT 1")
     suspend fun getItemBySyncId(syncId: String): Item?
 
+    // --- Item Stocks ---
+    @Query("SELECT * FROM item_stocks WHERE syncState IN ('PENDING_ADD', 'PENDING_UPDATE')")
+    suspend fun getPendingItemStocks(): List<ItemStock>
+    @Query("UPDATE item_stocks SET syncState = 'SYNCED' WHERE syncId = :syncId")
+    suspend fun markItemStockSynced(syncId: String)
+    @Query("SELECT * FROM item_stocks WHERE syncId = :syncId LIMIT 1")
+    suspend fun getItemStockBySyncId(syncId: String): ItemStock?
+
     // --- Item Units ---
     @Query("SELECT * FROM item_units WHERE syncState IN ('PENDING_ADD', 'PENDING_UPDATE')")
     suspend fun getPendingItemUnits(): List<ItemUnit>

@@ -6,6 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.api.GeminiHelper
 import com.example.data.model.*
 import com.example.data.repository.AppRepository
+
+data class StockSupplyEntry(
+    val itemId: Long,
+    val quantity: Double,
+    val unitCostInCurrency: Double,
+    val expiryDate: String
+)
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
@@ -50,6 +57,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val supabaseSyncManager = com.example.util.SupabaseSyncManager(application)
 
     val users = repository.userDao.getAllUsers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        
+    val warehouses = repository.warehouseDao.getAllWarehouses()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        
+    val accounts = repository.accountDao.getAllAccounts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
@@ -185,6 +198,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Database flows converted to StateFlows for Compose
     val items = repository.itemDao.getAllItems()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val itemStocks = repository.itemStockDao.getAllItemStocks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun getStocksForItem(itemId: Long): Flow<List<ItemStock>> {
+        return repository.itemStockDao.getStocksForItem(itemId)
+    }
 
     val expiringSoonItems = items.map { list ->
         val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
@@ -569,6 +589,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteAuditLog(log: AuditLog) = viewModelScope.launch {
         repository.deleteAuditLog(log)
+    }
+
+    fun transferStock(from: Long, to: Long, itemId: Long, qty: Double, notes: String) = viewModelScope.launch {
+        repository.createStockTransfer(from, to, itemId, qty, notes)
+    }
+
+    fun supplyStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = viewModelScope.launch {
+        repository.supplyStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes)
+    }
+
+    fun issueStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = viewModelScope.launch {
+        repository.issueStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes)
     }
 
     fun clearAllAuditLogs() = viewModelScope.launch {
@@ -1238,8 +1270,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         ?: list.firstOrNull()?.let { it.symbol.ifEmpty { it.code } }
                         ?: "ر.ي"
                 }
-            }
-        }
+            }        }
     }
 
     fun setReportCurrency(currency: String) {

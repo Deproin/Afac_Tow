@@ -43,9 +43,11 @@ fun ReportsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val invoices by viewModel.invoices.collectAsState()
     val journalEntries by viewModel.journalEntries.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val warehouses by viewModel.warehouses.collectAsState()
+    val items by viewModel.items.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("قائمة الدخل", "الميزانية العمومية", "ميزان المراجعة", "تقرير الحسابات الفرعية")
+    val tabs = listOf("قائمة الدخل", "الميزانية العمومية", "ميزان المراجعة", "الحسابات الفرعية", "أداء المستودعات")
 
     // Filter state for Sub-Accounts Report (Tab 3)
     val mappedAccounts = remember(currencyReportBalances) {
@@ -546,6 +548,80 @@ fun ReportsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    4 -> {
+                        // TAB 4: Warehouse Performance Report
+                        var selectedWarehouse by remember { mutableStateOf<Warehouse?>(null) }
+                        
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("تقرير أداء وحركة المستودعات", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                            
+                            if (warehouses.isNotEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("اختر المستودع:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        var expanded by remember { mutableStateOf(false) }
+                                        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                            Text(selectedWarehouse?.name ?: "كل المستودعات")
+                                        }
+                                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                            DropdownMenuItem(
+                                                text = { Text("كل المستودعات") },
+                                                onClick = { selectedWarehouse = null; expanded = false }
+                                            )
+                                            warehouses.forEach { w ->
+                                                DropdownMenuItem(
+                                                    text = { Text(w.name) },
+                                                    onClick = { selectedWarehouse = w; expanded = false }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            val filteredInvoices = if (selectedWarehouse == null) invoices else invoices.filter { it.warehouseId == selectedWarehouse!!.id }
+                            
+                            val salesInvoices = filteredInvoices.filter { it.type == "SALE_CASH" || it.type == "SALE_CREDIT" && it.currencyCode == selectedReportCurrency }
+                            val returnsInvoices = filteredInvoices.filter { it.type == "SALE_RETURN" && it.currencyCode == selectedReportCurrency }
+                            val totalSales = salesInvoices.sumOf { it.total }
+                            val totalReturns = returnsInvoices.sumOf { it.total }
+                            val netSales = totalSales - totalReturns
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(12.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("ملخص المبيعات (حسب الفواتير)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Divider()
+                                    FinancialReportRow("إجمالي المبيعات", totalSales, currency = selectedReportCurrency)
+                                    FinancialReportRow("مردودات المبيعات", totalReturns, color = Color.Red, currency = selectedReportCurrency)
+                                    Divider()
+                                    FinancialReportRow("صافي مبيعات المستودع", netSales, isBold = true, color = MaterialTheme.colorScheme.primary, currency = selectedReportCurrency)
+                                }
+                            }
+                            
+                            val stockIssues = filteredInvoices.filter { it.type == "STOCK_ISSUE" && it.currencyCode == selectedReportCurrency }
+                            val totalIssues = stockIssues.sumOf { it.total }
+                            
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("المنصرف والمستهلك داخلياً", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Divider()
+                                    FinancialReportRow("إجمالي المنصرف المخزني", totalIssues, color = MaterialTheme.colorScheme.error, currency = selectedReportCurrency)
                                 }
                             }
                         }

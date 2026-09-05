@@ -29,6 +29,9 @@ data class User(
     val permPrint: Boolean = true,
     val permShare: Boolean = true,
     
+    val defaultWarehouseId: Long? = null,
+    val defaultSafeAccountId: Long? = null,
+    
     val syncState: String = "PENDING_ADD",
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false
@@ -186,6 +189,7 @@ data class Invoice(
     val userId: Long,
     val currencyCode: String = "ر.ي",
     val exchangeRate: Double = 1.0,
+    val warehouseId: Long? = null,
     
     val syncState: String = "PENDING_ADD",
     val updatedAt: Long = System.currentTimeMillis(),
@@ -285,6 +289,36 @@ data class JournalEntryLine(
     val debit: Double = 0.0,
     val credit: Double = 0.0,
     val description: String = "",
+    
+    val syncState: String = "PENDING_ADD",
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+)
+
+@Entity(
+    tableName = "item_stocks",
+    foreignKeys = [
+        androidx.room.ForeignKey(
+            entity = Item::class,
+            parentColumns = ["id"],
+            childColumns = ["itemId"],
+            onDelete = androidx.room.ForeignKey.CASCADE
+        ),
+        androidx.room.ForeignKey(
+            entity = Warehouse::class,
+            parentColumns = ["id"],
+            childColumns = ["warehouseId"],
+            onDelete = androidx.room.ForeignKey.CASCADE
+        )
+    ],
+    indices = [androidx.room.Index("itemId"), androidx.room.Index("warehouseId")]
+)
+data class ItemStock(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val syncId: String = UUID.randomUUID().toString(),
+    val itemId: Long,
+    val warehouseId: Long,
+    val quantity: Double,
     
     val syncState: String = "PENDING_ADD",
     val updatedAt: Long = System.currentTimeMillis(),

@@ -498,9 +498,13 @@ fun ContactsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             var voucherErrorMsg by remember { mutableStateOf<String?>(null) }
             var expandedCashAccDropdown by remember { mutableStateOf(false) }
 
-            LaunchedEffect(cashAndBankAccounts) {
-                if (selectedCashAcc == null && cashAndBankAccounts.isNotEmpty()) {
-                    selectedCashAcc = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.first()
+            LaunchedEffect(cashAndBankAccounts, currentUser) {
+                if (cashAndBankAccounts.isNotEmpty()) {
+                    if (currentUser?.defaultSafeAccountId != null) {
+                        selectedCashAcc = cashAndBankAccounts.find { it.id == currentUser?.defaultSafeAccountId }
+                    } else if (selectedCashAcc == null) {
+                        selectedCashAcc = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.first()
+                    }
                 }
             }
 
@@ -517,13 +521,23 @@ fun ContactsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                         Text("حساب الخزينة / الصندوق / البنك المسدد/المستلم منه *", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
-                                onClick = { expandedCashAccDropdown = true },
+                                onClick = { 
+                                    if (currentUser?.defaultSafeAccountId == null) {
+                                        expandedCashAccDropdown = true
+                                    } else {
+                                        Toast.makeText(context, "لا يمكنك تغيير الصندوق، أنت مقيد بصندوق محدد مسبقاً", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Text(selectedCashAcc?.let { "${it.name} (${it.code}) - [رصيد: ${it.balance} ر.ي]" } ?: "اختر حساب الخزينة/البنك", fontSize = 12.sp)
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                    if (currentUser?.defaultSafeAccountId == null) {
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                    } else {
+                                        Icon(Icons.Default.Lock, contentDescription = "مقفل")
+                                    }
                                 }
                             }
                             DropdownMenu(

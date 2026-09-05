@@ -16,6 +16,7 @@ class AppRepository(context: Context) {
     val itemDao = db.itemDao()
     val itemUnitDao = db.itemUnitDao()
     val warehouseDao = db.warehouseDao()
+    val itemStockDao = db.itemStockDao()
     val stockTransferDao = db.stockTransferDao()
     val contactDao = db.contactDao()
     val invoiceDao = db.invoiceDao()
@@ -137,14 +138,37 @@ class AppRepository(context: Context) {
             val savedInvItem = invItem.copy(invoiceId = invoiceId)
             invoiceDao.insertInvoiceItem(savedInvItem)
 
-            // Update item quantity (using quantity * conversionFactor in base units)
+            // Warehouse Stock Logic
+            val whId = invoice.warehouseId ?: 1L
+            var stock = itemStockDao.getStockForItemAndWarehouse(item.id, whId)
+            if (stock == null) {
+                val newStock = ItemStock(itemId = item.id, warehouseId = whId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                val stockId = itemStockDao.insertItemStock(newStock)
+                stock = newStock.copy(id = stockId)
+            }
+            
             val qtyInBaseUnit = invItem.quantity * invItem.conversionFactor
-            val newQty = when (invoice.type) {
+            
+            if (invoice.type == "SALE_CASH" || invoice.type == "SALE_CREDIT") {
+                if (stock.quantity < qtyInBaseUnit) {
+                    throw Exception("عذراً، الكمية المتوفرة للصنف (${item.name}) في المستودع المحدد غير كافية. المتوفر: ${stock.quantity}")
+                }
+            }
+
+            val newStockQty = when (invoice.type) {
+                "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> stock.quantity - qtyInBaseUnit
+                "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> stock.quantity + qtyInBaseUnit
+                else -> stock.quantity
+            }
+            itemStockDao.updateItemStock(stock.copy(quantity = newStockQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+
+            // Total Item Quantity (Backward Compatibility)
+            val newTotalQty = when (invoice.type) {
                 "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity - qtyInBaseUnit
                 "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity + qtyInBaseUnit
                 else -> item.currentQuantity
             }
-            itemDao.updateItem(item.copy(currentQuantity = newQty))
+            itemDao.updateItem(item.copy(currentQuantity = newTotalQty, syncState = "PENDING_UPDATE"))
             
             // Cost calculation is based on base unit purchase price
             totalCost += item.purchasePrice * qtyInBaseUnit
@@ -420,13 +444,28 @@ class AppRepository(context: Context) {
         for (invItem in itemsList) {
             val item = itemDao.getItemById(invItem.itemId)
             if (item != null) {
-                val qtyInBaseUnit = invItem.quantity * invItem.conversionFactor
-                val newQty = when (invoice.type) {
-                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity + qtyInBaseUnit // reverse deduction
-                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity - qtyInBaseUnit // reverse addition
+                // Reverse Warehouse Stock
+                val whId = invoice.warehouseId ?: 1L
+                var stock = itemStockDao.getStockForItemAndWarehouse(item.id, whId)
+                if (stock == null) {
+                    val newStock = ItemStock(itemId = item.id, warehouseId = whId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    val stockId = itemStockDao.insertItemStock(newStock)
+                    stock = newStock.copy(id = stockId)
+                }
+                val newStockQty = when (invoice.type) {
+                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> stock.quantity + qtyInBaseUnit // reverse deduction
+                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> stock.quantity - qtyInBaseUnit // reverse addition
+                    else -> stock.quantity
+                }
+                itemStockDao.updateItemStock(stock.copy(quantity = newStockQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+
+                // Reverse Total Item Quantity
+                val newTotalQty = when (invoice.type) {
+                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity + qtyInBaseUnit
+                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity - qtyInBaseUnit
                     else -> item.currentQuantity
                 }
-                itemDao.updateItem(item.copy(currentQuantity = newQty))
+                itemDao.updateItem(item.copy(currentQuantity = newTotalQty, syncState = "PENDING_UPDATE"))
             }
         }
 
@@ -483,13 +522,30 @@ class AppRepository(context: Context) {
         for (invItem in oldItemsList) {
             val item = itemDao.getItemById(invItem.itemId)
             if (item != null) {
+                // Reverse Warehouse Stock
+                val whId = oldInvoice.warehouseId ?: 1L
+                var stock = itemStockDao.getStockForItemAndWarehouse(item.id, whId)
+                if (stock == null) {
+                    val newStock = ItemStock(itemId = item.id, warehouseId = whId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    val stockId = itemStockDao.insertItemStock(newStock)
+                    stock = newStock.copy(id = stockId)
+                }
+                
                 val qtyInBaseUnit = invItem.quantity * invItem.conversionFactor
-                val newQty = when (oldInvoice.type) {
+                
+                val newStockQty = when (oldInvoice.type) {
+                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> stock.quantity + qtyInBaseUnit
+                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> stock.quantity - qtyInBaseUnit
+                    else -> stock.quantity
+                }
+                itemStockDao.updateItemStock(stock.copy(quantity = newStockQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+
+                val newTotalQty = when (oldInvoice.type) {
                     "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity + qtyInBaseUnit
                     "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity - qtyInBaseUnit
                     else -> item.currentQuantity
                 }
-                itemDao.updateItem(item.copy(currentQuantity = newQty))
+                itemDao.updateItem(item.copy(currentQuantity = newTotalQty, syncState = "PENDING_UPDATE"))
             }
         }
 
@@ -546,12 +602,35 @@ class AppRepository(context: Context) {
             invoiceDao.insertInvoiceItem(savedInvItem)
 
             val qtyInBaseUnit = invItem.quantity * invItem.conversionFactor
-            val newQty = when (newInvoice.type) {
+            
+            // Apply Warehouse Stock
+            val whId = newInvoice.warehouseId ?: 1L
+            var stock = itemStockDao.getStockForItemAndWarehouse(item.id, whId)
+            if (stock == null) {
+                val newStock = ItemStock(itemId = item.id, warehouseId = whId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                val stockId = itemStockDao.insertItemStock(newStock)
+                stock = newStock.copy(id = stockId)
+            }
+            
+            if (newInvoice.type == "SALE_CASH" || newInvoice.type == "SALE_CREDIT") {
+                if (stock.quantity < qtyInBaseUnit) {
+                    throw Exception("عذراً، الكمية المتوفرة للصنف (${item.name}) في المستودع المحدد غير كافية بعد التعديل. المتوفر: ${stock.quantity}")
+                }
+            }
+
+            val newStockQty = when (newInvoice.type) {
+                "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> stock.quantity - qtyInBaseUnit
+                "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> stock.quantity + qtyInBaseUnit
+                else -> stock.quantity
+            }
+            itemStockDao.updateItemStock(stock.copy(quantity = newStockQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+
+            val newTotalQty = when (newInvoice.type) {
                 "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity - qtyInBaseUnit
                 "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity + qtyInBaseUnit
                 else -> item.currentQuantity
             }
-            itemDao.updateItem(item.copy(currentQuantity = newQty))
+            itemDao.updateItem(item.copy(currentQuantity = newTotalQty, syncState = "PENDING_UPDATE"))
             totalCost += item.purchasePrice * qtyInBaseUnit
         }
 
@@ -820,5 +899,156 @@ class AppRepository(context: Context) {
     suspend fun clearAllAuditLogs() = withContext(Dispatchers.IO) {
         auditLogDao.clearLogs()
     }
+    suspend fun createStockTransfer(from: Long, to: Long, itemId: Long, qty: Double, notes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            var fromStock = itemStockDao.getStockForItemAndWarehouse(itemId, from)
+            if (fromStock == null) {
+                val newStock = ItemStock(itemId = itemId, warehouseId = from, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                val id = itemStockDao.insertItemStock(newStock)
+                fromStock = newStock.copy(id = id)
+            }
+            
+            var toStock = itemStockDao.getStockForItemAndWarehouse(itemId, to)
+            if (toStock == null) {
+                val newStock = ItemStock(itemId = itemId, warehouseId = to, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                val id = itemStockDao.insertItemStock(newStock)
+                toStock = newStock.copy(id = id)
+            }
+
+            itemStockDao.updateItemStock(fromStock.copy(quantity = fromStock.quantity - qty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+            itemStockDao.updateItemStock(toStock.copy(quantity = toStock.quantity + qty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+            
+            logOperation("تحويل مخزني", "stock_transfers", "تحويل $qty من صنف $itemId من $from إلى $to. $notes")
+        }
+    }
+
+    suspend fun supplyStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val invoiceNum = "SUP-" + (10000000..99999999).random()
+            var total = 0.0
+            
+            val invoice = Invoice(
+                invoiceNumber = invoiceNum,
+                type = "STOCK_SUPPLY",
+                contactId = null,
+                subTotal = 0.0,
+                discount = 0.0,
+                tax = 0.0,
+                total = 0.0,
+                paidAmount = 0.0,
+                remainingAmount = 0.0,
+                paymentMethod = "None",
+                notes = generalNotes,
+                userId = 1,
+                currencyCode = currencyCode,
+                exchangeRate = exchangeRate,
+                warehouseId = warehouseId
+            )
+            val invId = invoiceDao.insertInvoice(invoice)
+            
+            for (entry in entries) {
+                val itemSubTotalLocal = (entry.quantity * entry.unitCostInCurrency) * exchangeRate
+                total += itemSubTotalLocal
+                
+                val invItem = InvoiceItem(
+                    invoiceId = invId,
+                    itemId = entry.itemId,
+                    quantity = entry.quantity,
+                    unitPrice = entry.unitCostInCurrency * exchangeRate,
+                    total = itemSubTotalLocal,
+                    unitName = "",
+                    conversionFactor = 1.0
+                )
+                invoiceDao.insertInvoiceItem(invItem)
+                
+                // Update warehouse stock
+                var stock = itemStockDao.getStockForItemAndWarehouse(entry.itemId, warehouseId)
+                if (stock == null) {
+                    val newStock = ItemStock(itemId = entry.itemId, warehouseId = warehouseId, quantity = entry.quantity, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    itemStockDao.insertItemStock(newStock)
+                } else {
+                    itemStockDao.updateItemStock(stock.copy(quantity = stock.quantity + entry.quantity, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+                }
+                
+                // Update global item quantity
+                val item = itemDao.getItemById(entry.itemId)
+                if (item != null) {
+                    itemDao.updateItem(item.copy(
+                        currentQuantity = item.currentQuantity + entry.quantity,
+                        purchasePrice = if (entry.unitCostInCurrency > 0) entry.unitCostInCurrency * exchangeRate else item.purchasePrice,
+                        expiryDate = if (entry.expiryDate.isNotBlank()) entry.expiryDate else item.expiryDate
+                    ))
+                }
+            }
+            
+            invoiceDao.updateInvoice(invoice.copy(id = invId, subTotal = total, total = total))
+            
+            logOperation("توريد مخزني", "stock_supply", "توريد ${entries.size} أصناف للمستودع $warehouseId بقيمة $total. $generalNotes")
+        }
+    }
+
+    suspend fun issueStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val invoiceNum = "ISS-" + (10000000..99999999).random()
+            var total = 0.0
+            
+            val invoice = Invoice(
+                invoiceNumber = invoiceNum,
+                type = "STOCK_ISSUE",
+                contactId = null,
+                subTotal = 0.0,
+                discount = 0.0,
+                tax = 0.0,
+                total = 0.0,
+                paidAmount = 0.0,
+                remainingAmount = 0.0,
+                paymentMethod = "None",
+                notes = generalNotes,
+                userId = 1,
+                currencyCode = currencyCode,
+                exchangeRate = exchangeRate,
+                warehouseId = warehouseId
+            )
+            val invId = invoiceDao.insertInvoice(invoice)
+            
+            for (entry in entries) {
+                val itemSubTotalLocal = (entry.quantity * entry.unitCostInCurrency) * exchangeRate
+                total += itemSubTotalLocal
+                
+                val invItem = InvoiceItem(
+                    invoiceId = invId,
+                    itemId = entry.itemId,
+                    quantity = entry.quantity, // Positive in the line item, but implies deduction due to invoice type
+                    unitPrice = entry.unitCostInCurrency * exchangeRate,
+                    total = itemSubTotalLocal,
+                    unitName = "",
+                    conversionFactor = 1.0
+                )
+                invoiceDao.insertInvoiceItem(invItem)
+                
+                // Update warehouse stock (deduct)
+                var stock = itemStockDao.getStockForItemAndWarehouse(entry.itemId, warehouseId)
+                if (stock == null) {
+                    val newStock = ItemStock(itemId = entry.itemId, warehouseId = warehouseId, quantity = -entry.quantity, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    itemStockDao.insertItemStock(newStock)
+                } else {
+                    itemStockDao.updateItemStock(stock.copy(quantity = stock.quantity - entry.quantity, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+                }
+                
+                // Update global item quantity (deduct)
+                val item = itemDao.getItemById(entry.itemId)
+                if (item != null) {
+                    itemDao.updateItem(item.copy(
+                        currentQuantity = item.currentQuantity - entry.quantity
+                    ))
+                }
+            }
+            
+            invoiceDao.updateInvoice(invoice.copy(id = invId, subTotal = total, total = total))
+            
+            logOperation("صرف مخزني", "stock_issue", "صرف ${entries.size} أصناف من المستودع $warehouseId بقيمة $total. $generalNotes")
+        }
+    }
 }
+
 

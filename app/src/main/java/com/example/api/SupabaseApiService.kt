@@ -92,6 +92,29 @@ interface SupabaseApiService {
         @Header("Authorization") auth: String
     ): Response<Unit>
 
+    // --- Item Stocks ---
+    @GET("rest/v1/item_stocks")
+    suspend fun getItemStocks(
+        @Query("company_id") companyId: String,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String
+    ): Response<List<ItemStockDto>>
+
+    @POST("rest/v1/item_stocks")
+    suspend fun upsertItemStock(
+        @Body itemStock: ItemStockDto,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String,
+        @Header("Prefer") prefer: String = "resolution=merge-duplicates"
+    ): Response<Unit>
+
+    @DELETE("rest/v1/item_stocks")
+    suspend fun deleteItemStock(
+        @Query("syncid") syncId: String,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String
+    ): Response<Unit>
+
     // --- Item Units ---
     @GET("rest/v1/item_units")
     suspend fun getItemUnits(

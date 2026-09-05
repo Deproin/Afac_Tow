@@ -26,6 +26,8 @@ import java.util.*
 fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val users by viewModel.users.collectAsState()
     val auditLogs by viewModel.auditLogs.collectAsState()
+    val warehouses by viewModel.warehouses.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedUserForEdit by remember { mutableStateOf<User?>(null) }
@@ -284,17 +286,62 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                 label = { Text("🔍 مراجع", fontSize = 10.sp) }
                             )
                         }
+
+                        Divider()
+                        
+                        var selWhId by remember { mutableStateOf<Long?>(null) }
+                        var whExpanded by remember { mutableStateOf(false) }
+                        val selectedWhName = warehouses.find { it.id == selWhId }?.name ?: "الكل (بدون تقييد)"
+                        
+                        ExposedDropdownMenuBox(expanded = whExpanded, onExpandedChange = { whExpanded = it }) {
+                            OutlinedTextField(
+                                value = selectedWhName,
+                                onValueChange = {}, readOnly = true,
+                                label = { Text("المخزن الافتراضي للمستخدم") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = whExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(expanded = whExpanded, onDismissRequest = { whExpanded = false }) {
+                                DropdownMenuItem(text = { Text("الكل (بدون تقييد)") }, onClick = { selWhId = null; whExpanded = false })
+                                warehouses.forEach { wh ->
+                                    DropdownMenuItem(text = { Text(wh.name) }, onClick = { selWhId = wh.id; whExpanded = false })
+                                }
+                            }
+                        }
+
+                        var selAccId by remember { mutableStateOf<Long?>(null) }
+                        var accExpanded by remember { mutableStateOf(false) }
+                        val selectedAccName = accounts.find { it.id == selAccId }?.name ?: "الكل (بدون تقييد)"
+                        
+                        ExposedDropdownMenuBox(expanded = accExpanded, onExpandedChange = { accExpanded = it }) {
+                            OutlinedTextField(
+                                value = selectedAccName,
+                                onValueChange = {}, readOnly = true,
+                                label = { Text("الصندوق الافتراضي للمستخدم") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(expanded = accExpanded, onDismissRequest = { accExpanded = false }) {
+                                DropdownMenuItem(text = { Text("الكل (بدون تقييد)") }, onClick = { selAccId = null; accExpanded = false })
+                                accounts.filter { it.type == "ASSETS" }.forEach { acc ->
+                                    DropdownMenuItem(text = { Text(acc.name) }, onClick = { selAccId = acc.id; accExpanded = false })
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
                             if (usernameInput.trim().isNotEmpty() && passwordInput.trim().isNotEmpty()) {
+                                // Extract state outside
+                                val finalWhId = selWhId
+                                val finalAccId = selAccId
                                 val newPerms = when (selectedRolePreset) {
-                                    "ADMIN" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), permSale = true, permPurchase = true, permDeleteInvoice = true, permEditInvoice = true, permViewProfits = true, permViewReports = true, permEditPrices = true, permBackup = true, permSettings = true, permAI = true)
-                                    "ACCOUNTANT" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), permSale = true, permPurchase = true, permDeleteInvoice = false, permEditInvoice = true, permViewProfits = true, permViewReports = true, permEditPrices = false, permBackup = false, permSettings = false, permAI = true)
-                                    "AUDITOR" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), permSale = false, permPurchase = false, permDeleteInvoice = false, permEditInvoice = false, permViewProfits = true, permViewReports = true, permEditPrices = false, permBackup = false, permSettings = false, permAI = false)
-                                    else -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), permSale = true, permPurchase = false, permDeleteInvoice = false, permEditInvoice = false, permViewProfits = false, permViewReports = false, permEditPrices = false, permBackup = false, permSettings = false, permAI = false)
+                                    "ADMIN" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), defaultWarehouseId = finalWhId, defaultSafeAccountId = finalAccId, permSale = true, permPurchase = true, permDeleteInvoice = true, permEditInvoice = true, permViewProfits = true, permViewReports = true, permEditPrices = true, permBackup = true, permSettings = true, permAI = true)
+                                    "ACCOUNTANT" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), defaultWarehouseId = finalWhId, defaultSafeAccountId = finalAccId, permSale = true, permPurchase = true, permDeleteInvoice = false, permEditInvoice = true, permViewProfits = true, permViewReports = true, permEditPrices = false, permBackup = false, permSettings = false, permAI = true)
+                                    "AUDITOR" -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), defaultWarehouseId = finalWhId, defaultSafeAccountId = finalAccId, permSale = false, permPurchase = false, permDeleteInvoice = false, permEditInvoice = false, permViewProfits = true, permViewReports = true, permEditPrices = false, permBackup = false, permSettings = false, permAI = false)
+                                    else -> User(username = usernameInput.trim(), passwordHash = passwordInput.trim(), defaultWarehouseId = finalWhId, defaultSafeAccountId = finalAccId, permSale = true, permPurchase = false, permDeleteInvoice = false, permEditInvoice = false, permViewProfits = false, permViewReports = false, permEditPrices = false, permBackup = false, permSettings = false, permAI = false)
                                 }
                                 viewModel.addUser(newPerms)
                                 showAddDialog = false
@@ -324,6 +371,10 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             var pBackup by remember { mutableStateOf(user.permBackup) }
             var pSettings by remember { mutableStateOf(user.permSettings) }
             var pAI by remember { mutableStateOf(user.permAI) }
+            var editWhId by remember { mutableStateOf(user.defaultWarehouseId) }
+            var editAccId by remember { mutableStateOf(user.defaultSafeAccountId) }
+            var editWhExpanded by remember { mutableStateOf(false) }
+            var editAccExpanded by remember { mutableStateOf(false) }
 
             AlertDialog(
                 onDismissRequest = { selectedUserForEdit = null },
@@ -385,6 +436,46 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                             item { PermissionToggle("صلاحية النسخ الاحتياطي والاستعادة", pBackup) { pBackup = it } }
                             item { PermissionToggle("صلاحية تعديل إعدادات المنشأة", pSettings) { pSettings = it } }
                             item { PermissionToggle("صلاحية استخدام مساعد الذكاء الاصطناعي", pAI) { pAI = it } }
+                            
+                            item { Divider(modifier = Modifier.padding(vertical = 4.dp)) }
+                            
+                            item {
+                                val selectedWhName = warehouses.find { it.id == editWhId }?.name ?: "الكل (بدون تقييد)"
+                                ExposedDropdownMenuBox(expanded = editWhExpanded, onExpandedChange = { editWhExpanded = it }) {
+                                    OutlinedTextField(
+                                        value = selectedWhName,
+                                        onValueChange = {}, readOnly = true,
+                                        label = { Text("المخزن الافتراضي للمستخدم") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = editWhExpanded) },
+                                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(expanded = editWhExpanded, onDismissRequest = { editWhExpanded = false }) {
+                                        DropdownMenuItem(text = { Text("الكل (بدون تقييد)") }, onClick = { editWhId = null; editWhExpanded = false })
+                                        warehouses.forEach { wh ->
+                                            DropdownMenuItem(text = { Text(wh.name) }, onClick = { editWhId = wh.id; editWhExpanded = false })
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            item {
+                                val selectedAccName = accounts.find { it.id == editAccId }?.name ?: "الكل (بدون تقييد)"
+                                ExposedDropdownMenuBox(expanded = editAccExpanded, onExpandedChange = { editAccExpanded = it }) {
+                                    OutlinedTextField(
+                                        value = selectedAccName,
+                                        onValueChange = {}, readOnly = true,
+                                        label = { Text("الصندوق الافتراضي للمستخدم") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = editAccExpanded) },
+                                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(expanded = editAccExpanded, onDismissRequest = { editAccExpanded = false }) {
+                                        DropdownMenuItem(text = { Text("الكل (بدون تقييد)") }, onClick = { editAccId = null; editAccExpanded = false })
+                                        accounts.filter { it.type == "ASSETS" }.forEach { acc ->
+                                            DropdownMenuItem(text = { Text(acc.name) }, onClick = { editAccId = acc.id; editAccExpanded = false })
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -402,10 +493,14 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                     permEditPrices = pPrices,
                                     permBackup = pBackup,
                                     permSettings = pSettings,
-                                    permAI = pAI
+                                    permAI = pAI,
+                                    defaultWarehouseId = editWhId,
+                                    defaultSafeAccountId = editAccId,
+                                    syncState = "PENDING_UPDATE"
                                 )
                             )
                             selectedUserForEdit = null
+                        }
                         }
                     ) {
                         Text("حفظ وتحديث الصلاحيات", color = Color.White, fontWeight = FontWeight.Bold)

@@ -40,6 +40,7 @@ val PRESET_CATEGORIES = listOf("عام", "مواد غذائية", "إلكترو�
 fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val items by viewModel.items.collectAsState()
     val warehouses by viewModel.warehouses.collectAsState()
+    val itemStocks by viewModel.itemStocks.collectAsState()
     val itemUnits by viewModel.itemUnits.collectAsState()
 
     val tempUnits = remember { mutableStateListOf<ItemUnit>() }
@@ -83,6 +84,7 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
     // Stock Supply Form States
     var showStockSupplyDialog by remember { mutableStateOf(false) }
+    var showStockIssueDialog by remember { mutableStateOf(false) }
     var supplyTargetItem by remember { mutableStateOf<Item?>(null) }
     var supplyWarehouse by remember { mutableStateOf<Warehouse?>(null) }
     var supplyQtyInput by remember { mutableStateOf("10.0") }
@@ -200,7 +202,9 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1) }
+                        text = { Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = Color.Gray
                     )
                 }
             }
@@ -354,6 +358,8 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                 items(filteredItems) { item ->
                                     ItemRow(
                                         item = item,
+                                        itemStocks = itemStocks,
+                                        warehouses = warehouses,
                                         onEdit = { selectedItemForEdit = item },
                                         onDelete = { viewModel.deleteItem(item) }
                                     )
@@ -703,6 +709,15 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 items = items,
                 warehouses = warehouses,
                 onDismiss = { showStockSupplyDialog = false }
+            )
+        }
+
+        if (showStockIssueDialog) {
+            MultiItemStockIssueDialog(
+                viewModel = viewModel,
+                items = items,
+                warehouses = warehouses,
+                onDismiss = { showStockIssueDialog = false }
             )
         }
     }
@@ -1560,9 +1575,19 @@ fun DropdownSelector(
 }
 
 @Composable
-fun ItemRow(item: Item, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun ItemRow(
+    item: Item,
+    itemStocks: List<ItemStock> = emptyList(),
+    warehouses: List<Warehouse> = emptyList(),
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -1611,13 +1636,44 @@ fun ItemRow(item: Item, onEdit: () -> Unit, onDelete: () -> Unit) {
                     }
                 }
                 Column {
-                    Text("المخزون الحالي", fontSize = 10.sp, color = Color.Gray)
+                    Text("المخزون الإجمالي", fontSize = 10.sp, color = Color.Gray)
                     Text(
                         text = "${item.currentQuantity} ${item.unit}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (item.currentQuantity <= item.minLimit) Color.Red else Color(0xFF2E7D32)
                     )
+                }
+            }
+
+            // Expandable Warehouse Stocks Section
+            if (expanded && warehouses.isNotEmpty()) {
+                val itemWarehouseStocks = itemStocks.filter { it.itemId == item.id }
+                if (itemWarehouseStocks.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("توزيع المخزون عبر المستودعات:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemWarehouseStocks.forEach { stock ->
+                            val wName = warehouses.find { it.id == stock.warehouseId }?.name ?: "مستودع مجهول"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• $wName", fontSize = 11.sp, color = Color.DarkGray)
+                                Text("${stock.quantity} ${item.unit}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (stock.quantity <= 0) Color.Red else MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1810,6 +1866,339 @@ fun ItemUnitsManagerSection(
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("إضافة هذه الوحدة الفرعية للصنف", fontSize = 11.sp, color = Color.White)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MultiItemStockIssueDialog(
+    viewModel: AppViewModel,
+    items: List<Item>,
+    warehouses: List<Warehouse>,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val currencies by viewModel.currencies.collectAsState()
+
+    var selectedWarehouse by remember { mutableStateOf(warehouses.firstOrNull()) }
+    var selectedCurrencyCode by remember { mutableStateOf("YER") }
+    var exchangeRateInput by remember { mutableStateOf("1.0") }
+    var generalNotes by remember { mutableStateOf("") }
+
+    // Item selection form state
+    var selectedItemToAdd by remember { mutableStateOf<Item?>(null) }
+    var qtyInput by remember { mutableStateOf("1") }
+    var costInput by remember { mutableStateOf("0.0") }
+
+    val supplyBasket = remember { mutableStateListOf<Triple<Item, com.example.ui.viewmodel.StockSupplyEntry, Double>>() }
+
+    val exchangeRate = exchangeRateInput.toDoubleOrNull() ?: 1.0
+    val totalAmountInCurrency = supplyBasket.sumOf { it.third }
+    val totalAmountLocal = totalAmountInCurrency * exchangeRate
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.90f),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Output,
+                            contentDescription = "صرف مخزني",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = "📤 سند صرف مخزني (تالف/استخدام داخلي)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "إغلاق")
+                    }
+                }
+
+                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Scrollable Form Body
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Warehouse & Currency Row
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("بيانات المستودع والعملة", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (warehouses.isNotEmpty()) {
+                                    Column(modifier = Modifier.weight(1.2f)) {
+                                        Text("يصرف من مستودع:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        DropdownSelector(
+                                            options = warehouses.map { it.name },
+                                            selectedOption = selectedWarehouse?.name ?: warehouses.first().name,
+                                            onOptionSelected = { selected ->
+                                                selectedWarehouse = warehouses.find { it.name == selected }
+                                            }
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("العملة المرجعية:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    val currencyOptions = if (currencies.isEmpty()) listOf("YER", "SAR", "USD") else currencies.map { it.code }
+                                    DropdownSelector(
+                                        options = currencyOptions,
+                                        selectedOption = selectedCurrencyCode,
+                                        onOptionSelected = { selected ->
+                                            selectedCurrencyCode = selected
+                                            val currObj = currencies.find { it.code == selected }
+                                            if (currObj != null && currObj.exchangeRate > 0) {
+                                                exchangeRateInput = currObj.exchangeRate.toString()
+                                            } else if (selected == "YER") {
+                                                exchangeRateInput = "1.0"
+                                            }
+                                        }
+                                    )
+                                }
+
+                                if (selectedCurrencyCode != "YER") {
+                                    Column(modifier = Modifier.weight(0.9f)) {
+                                        Text("سعر الصرف:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        OutlinedTextField(
+                                            value = exchangeRateInput,
+                                            onValueChange = { exchangeRateInput = it },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add Item Configurator Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("➖ صرف صنف من المخزون", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+
+                            Text("اختر الصنف المراد صرفه:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            DropdownSelector(
+                                options = items.map { "${it.name} (${it.code}) [${it.currentQuantity}]" },
+                                selectedOption = selectedItemToAdd?.let { "${it.name} (${it.code}) [${it.currentQuantity}]" } ?: "اختر الصنف",
+                                onOptionSelected = { selected ->
+                                    val matched = items.find { selected.startsWith("${it.name} (${it.code})") }
+                                    selectedItemToAdd = matched
+                                    if (matched != null && matched.purchasePrice > 0) {
+                                        costInput = matched.purchasePrice.toString()
+                                    }
+                                }
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = qtyInput,
+                                    onValueChange = { qtyInput = it },
+                                    label = { Text("الكمية المصروفة *") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                )
+
+                                OutlinedTextField(
+                                    value = costInput,
+                                    onValueChange = { costInput = it },
+                                    label = { Text("تكلفة الصرف المقدرة") },
+                                    modifier = Modifier.weight(1.2f),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    val item = selectedItemToAdd
+                                    val qty = qtyInput.toDoubleOrNull() ?: 0.0
+                                    val cost = costInput.toDoubleOrNull() ?: 0.0
+                                    if (item != null && qty > 0) {
+                                        if (qty > item.currentQuantity) {
+                                            Toast.makeText(context, "تنبيه: الكمية المصروفة أكبر من المتوفر (${item.currentQuantity})", Toast.LENGTH_SHORT).show()
+                                        }
+                                        val entry = com.example.ui.viewmodel.StockSupplyEntry(
+                                            itemId = item.id,
+                                            quantity = qty,
+                                            unitCostInCurrency = cost,
+                                            expiryDate = ""
+                                        )
+                                        supplyBasket.add(Triple(item, entry, qty * cost))
+                                        qtyInput = "1"
+                                        Toast.makeText(context, "تمت إضافة ${item.name} إلى السند", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "يرجى اختيار الصنف وتحديد كمية صحيحة", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "إضافة")
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إدراج ضمن قائمة الصرف", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Basket Table
+                    if (supplyBasket.isNotEmpty()) {
+                        Text("📋 الأصناف المصروفة في السند (${supplyBasket.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                supplyBasket.forEachIndexed { idx, row ->
+                                    val (item, entry, subTotal) = row
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1.5f)) {
+                                            Text(item.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("الرمز: ${item.code}", fontSize = 10.sp, color = Color.Gray)
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                                            Text("صرف: ${entry.quantity} ${item.unit}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                                            Text("التكلفة: $subTotal $selectedCurrencyCode", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        }
+
+                                        IconButton(
+                                            onClick = { supplyBasket.removeAt(idx) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = generalNotes,
+                        onValueChange = { generalNotes = it },
+                        label = { Text("سبب الصرف / المستلم / ملاحظات عامة") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                // Total & Save Footer
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("إجمالي تكلفة المصروف ($selectedCurrencyCode):", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                text = "$totalAmountInCurrency $selectedCurrencyCode",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("إلغاء") }
+
+                    Button(
+                        onClick = {
+                            if (supplyBasket.isNotEmpty()) {
+                                val wId = selectedWarehouse?.id ?: 0L
+                                val entriesList = supplyBasket.map { it.second }
+                                viewModel.issueStockMulti(
+                                    entries = entriesList,
+                                    warehouseId = wId,
+                                    currencyCode = selectedCurrencyCode,
+                                    exchangeRate = exchangeRate,
+                                    generalNotes = generalNotes.trim()
+                                )
+                                onDismiss()
+                                Toast.makeText(context, "✅ تم حفظ سند الصرف المخزني بنجاح", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "يرجى إضافة صنف واحد على الأقل", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = "حفظ")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("اعتماد وحفظ الصرف 📤", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }

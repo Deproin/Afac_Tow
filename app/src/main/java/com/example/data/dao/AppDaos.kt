@@ -114,6 +114,9 @@ interface WarehouseDao {
     @Query("SELECT * FROM warehouses WHERE isDeleted = 0 ORDER BY name ASC")
     fun getAllWarehouses(): Flow<List<Warehouse>>
 
+    @Query("SELECT * FROM warehouses WHERE id = :id LIMIT 1")
+    suspend fun getWarehouseById(id: Long): Warehouse?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWarehouse(warehouse: Warehouse): Long
 
@@ -122,6 +125,27 @@ interface WarehouseDao {
 
     @Delete
     suspend fun deleteWarehouse(warehouse: Warehouse)
+}
+
+@Dao
+interface ItemStockDao {
+    @Query("SELECT * FROM item_stocks WHERE isDeleted = 0")
+    fun getAllItemStocks(): Flow<List<ItemStock>>
+
+    @Query("SELECT * FROM item_stocks WHERE itemId = :itemId AND isDeleted = 0")
+    fun getStocksForItem(itemId: Long): Flow<List<ItemStock>>
+
+    @Query("SELECT * FROM item_stocks WHERE itemId = :itemId AND warehouseId = :warehouseId AND isDeleted = 0 LIMIT 1")
+    suspend fun getStockForItemAndWarehouse(itemId: Long, warehouseId: Long): ItemStock?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItemStock(itemStock: ItemStock): Long
+
+    @Update
+    suspend fun updateItemStock(itemStock: ItemStock)
+
+    @Delete
+    suspend fun deleteItemStock(itemStock: ItemStock)
 }
 
 @Dao
@@ -216,14 +240,14 @@ interface InvoiceDao {
 
 @Dao
 interface AccountDao {
-    @Query("SELECT * FROM accounts WHERE isDeleted = 0 ORDER BY code ASC")
+    @Query("SELECT * FROM accounts WHERE isDeleted = 0 ORDER BY type, name")
     fun getAllAccounts(): Flow<List<Account>>
+
+    @Query("SELECT * FROM accounts WHERE id = :id LIMIT 1")
+    suspend fun getAccountById(id: Long): Account?
 
     @Query("SELECT * FROM accounts WHERE code = :code AND isDeleted = 0 LIMIT 1")
     suspend fun getAccountByCode(code: String): Account?
-
-    @Query("SELECT * FROM accounts WHERE id = :id AND isDeleted = 0 LIMIT 1")
-    suspend fun getAccountById(id: Long): Account?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: Account): Long

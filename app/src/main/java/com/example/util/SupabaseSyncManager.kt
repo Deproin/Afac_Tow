@@ -255,6 +255,8 @@ class SupabaseSyncManager(private val context: Context) {
         // Users - Push all active users to ensure employees are available in Supabase
         val users = db.userDao().getAllUsersList()
         users.forEach { user ->
+            val defWhSyncId = user.defaultWarehouseId?.let { db.warehouseDao().getWarehouseById(it)?.syncId }
+            val defSafeSyncId = user.defaultSafeAccountId?.let { db.accountDao().getAccountById(it)?.syncId }
             val dto = UserDto(
                 syncId = user.syncId, companyId = companyId, username = user.username, passwordHash = user.passwordHash,
                 isSuspended = user.isSuspended, lastLogin = user.lastLogin, operationCount = user.operationCount,
@@ -262,7 +264,9 @@ class SupabaseSyncManager(private val context: Context) {
                 permEditInvoice = user.permEditInvoice, permViewProfits = user.permViewProfits, permViewReports = user.permViewReports,
                 permEditPrices = user.permEditPrices, permBackup = user.permBackup, permSettings = user.permSettings,
                 permAI = user.permAI, permAccountStatement = user.permAccountStatement, permStocktake = user.permStocktake,
-                permPrint = user.permPrint, permShare = user.permShare, syncState = "SYNCED", updatedAt = user.updatedAt, isDeleted = user.isDeleted
+                permPrint = user.permPrint, permShare = user.permShare,
+                defaultWarehouseSyncId = defWhSyncId, defaultSafeAccountSyncId = defSafeSyncId,
+                syncState = "SYNCED", updatedAt = user.updatedAt, isDeleted = user.isDeleted
             )
             val res = api.upsertUser(dto, supabaseAnonKey, authHeader)
             if (res.isSuccessful) {
@@ -299,6 +303,21 @@ class SupabaseSyncManager(private val context: Context) {
                 )
                 val res = api.upsertItemUnit(dto, supabaseAnonKey, authHeader)
                 if (res.isSuccessful) syncDao.markItemUnitSynced(iu.syncId)
+            }
+        }
+
+        // Item Stocks
+        val itemStocks = syncDao.getPendingItemStocks()
+        itemStocks.forEach { stock ->
+            val item = db.itemDao().getItemById(stock.itemId)
+            val warehouse = db.warehouseDao().getWarehouseById(stock.warehouseId)
+            if (item != null && warehouse != null) {
+                val dto = ItemStockDto(
+                    syncId = stock.syncId, companyId = companyId, itemSyncId = item.syncId, warehouseSyncId = warehouse.syncId,
+                    quantity = stock.quantity, syncState = "SYNCED", updatedAt = stock.updatedAt, isDeleted = stock.isDeleted
+                )
+                val res = api.upsertItemStock(dto, supabaseAnonKey, authHeader)
+                if (res.isSuccessful) syncDao.markItemStockSynced(stock.syncId)
             }
         }
 
@@ -374,6 +393,9 @@ class SupabaseSyncManager(private val context: Context) {
             val userRes = api.getUsers("eq.$companyId", supabaseAnonKey, authHeader)
             if (userRes.isSuccessful) {
                 userRes.body()?.forEach { u ->
+                    val defWhId = u.defaultWarehouseSyncId?.let { syncDao.getWarehouseBySyncId(it)?.id }
+                    val defSafeId = u.defaultSafeAccountSyncId?.let { syncDao.getAccountBySyncId(it)?.id }
+                    
                     val existing = db.userDao().getAllUsers().firstOrNull()?.find { it.username == u.username }
                     if (existing == null) {
                         db.userDao().insertUser(
@@ -384,7 +406,9 @@ class SupabaseSyncManager(private val context: Context) {
                                 permEditInvoice = u.permEditInvoice, permViewProfits = u.permViewProfits, permViewReports = u.permViewReports,
                                 permEditPrices = u.permEditPrices, permBackup = u.permBackup, permSettings = u.permSettings,
                                 permAI = u.permAI, permAccountStatement = u.permAccountStatement, permStocktake = u.permStocktake,
-                                permPrint = u.permPrint, permShare = u.permShare, syncState = "SYNCED"
+                                permPrint = u.permPrint, permShare = u.permShare,
+                                defaultWarehouseId = defWhId, defaultSafeAccountId = defSafeId,
+                                syncState = "SYNCED"
                             )
                         )
                     } else {
@@ -396,7 +420,9 @@ class SupabaseSyncManager(private val context: Context) {
                                 permEditInvoice = u.permEditInvoice, permViewProfits = u.permViewProfits, permViewReports = u.permViewReports,
                                 permEditPrices = u.permEditPrices, permBackup = u.permBackup, permSettings = u.permSettings,
                                 permAI = u.permAI, permAccountStatement = u.permAccountStatement, permStocktake = u.permStocktake,
-                                permPrint = u.permPrint, permShare = u.permShare, syncState = "SYNCED"
+                                permPrint = u.permPrint, permShare = u.permShare,
+                                defaultWarehouseId = defWhId, defaultSafeAccountId = defSafeId,
+                                syncState = "SYNCED"
                             )
                         )
                     }
@@ -428,6 +454,31 @@ class SupabaseSyncManager(private val context: Context) {
                                 purchasePrice = item.purchasePrice, salePrice = item.salePrice, wholesalePrice = item.wholesalePrice,
                                 specialPrice = item.specialPrice, currentQuantity = item.currentQuantity, notes = item.notes,
                                 imagePath = item.imagePath, expiryDate = item.expiryDate, syncState = "SYNCED"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 2.5 Item Stocks
+            val stockRes = api.getItemStocks("eq.$companyId", supabaseAnonKey, authHeader)
+            if (stockRes.isSuccessful) {
+                stockRes.body()?.forEach { stock ->
+                    val existing = syncDao.getItemStockBySyncId(stock.syncId)
+                    val localItemId = stock.itemSyncId?.let { syncDao.getItemBySyncId(it)?.id } ?: return@forEach
+                    val localWhId = stock.warehouseSyncId?.let { syncDao.getWarehouseBySyncId(it)?.id } ?: return@forEach
+                    if (existing == null) {
+                        db.itemStockDao().insertItemStock(
+                            ItemStock(
+                                syncId = stock.syncId, itemId = localItemId, warehouseId = localWhId,
+                                quantity = stock.quantity, syncState = "SYNCED", updatedAt = stock.updatedAt, isDeleted = stock.isDeleted
+                            )
+                        )
+                    } else {
+                        db.itemStockDao().updateItemStock(
+                            existing.copy(
+                                itemId = localItemId, warehouseId = localWhId, quantity = stock.quantity,
+                                syncState = "SYNCED", updatedAt = stock.updatedAt, isDeleted = stock.isDeleted
                             )
                         )
                     }
@@ -489,6 +540,7 @@ class SupabaseSyncManager(private val context: Context) {
                     val existing = syncDao.getInvoiceBySyncId(i.syncId)
                     val localContactId = i.contactSyncId?.let { syncDao.getContactBySyncId(it)?.id }
                     val localUserId = i.userSyncId?.let { syncDao.getUserBySyncId(it)?.id } ?: 1L
+                    val localWhId = i.warehouseSyncId?.let { syncDao.getWarehouseBySyncId(it)?.id }
                     if (existing == null) {
                         db.invoiceDao().insertInvoice(
                             Invoice(
@@ -497,7 +549,7 @@ class SupabaseSyncManager(private val context: Context) {
                                 discount = i.discount, tax = i.tax, total = i.total, paidAmount = i.paidAmount,
                                 remainingAmount = i.remainingAmount, paymentMethod = i.paymentMethod,
                                 notes = i.notes, userId = localUserId, currencyCode = i.currencyCode,
-                                exchangeRate = i.exchangeRate, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
+                                exchangeRate = i.exchangeRate, warehouseId = localWhId, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
                             )
                         )
                     } else {
@@ -508,7 +560,7 @@ class SupabaseSyncManager(private val context: Context) {
                                 tax = i.tax, total = i.total, paidAmount = i.paidAmount,
                                 remainingAmount = i.remainingAmount, paymentMethod = i.paymentMethod,
                                 notes = i.notes, userId = localUserId, currencyCode = i.currencyCode,
-                                exchangeRate = i.exchangeRate, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
+                                exchangeRate = i.exchangeRate, warehouseId = localWhId, syncState = "SYNCED", updatedAt = i.updatedAt, isDeleted = i.isDeleted
                             )
                         )
                     }

@@ -511,6 +511,7 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
     val cashTransactions by viewModel.cashTransactions.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
 
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
     val tabs = listOf("دليل الحسابات", "القيود اليومية", "سندات القبض والصرف")
@@ -545,9 +546,13 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
     var selectedCounterpartContact by remember { mutableStateOf<Contact?>(null) }
     var voucherError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(cashAndBankAccounts) {
-        if (selectedMainCashAcc == null && cashAndBankAccounts.isNotEmpty()) {
-            selectedMainCashAcc = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.firstOrNull()
+    LaunchedEffect(cashAndBankAccounts, currentUser) {
+        if (cashAndBankAccounts.isNotEmpty()) {
+            if (currentUser?.defaultSafeAccountId != null) {
+                selectedMainCashAcc = cashAndBankAccounts.find { it.id == currentUser?.defaultSafeAccountId }
+            } else if (selectedMainCashAcc == null) {
+                selectedMainCashAcc = cashAndBankAccounts.firstOrNull { it.name.contains("الصندوق") } ?: cashAndBankAccounts.firstOrNull()
+            }
         }
     }
 
@@ -848,13 +853,23 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                         var expandedMainDropdown by remember { mutableStateOf(false) }
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
-                                onClick = { expandedMainDropdown = true },
+                                onClick = {
+                                    if (currentUser?.defaultSafeAccountId == null) {
+                                        expandedMainDropdown = true
+                                    } else {
+                                        Toast.makeText(context, "لا يمكنك تغيير الصندوق، أنت مقيد بصندوق محدد مسبقاً", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Text(selectedMainCashAcc?.let { "${it.name} (${it.code})" } ?: "اختر حساب الخزينة/البنك", fontSize = 12.sp)
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                    if (currentUser?.defaultSafeAccountId == null) {
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                    } else {
+                                        Icon(Icons.Default.Lock, contentDescription = "مقفل")
+                                    }
                                 }
                             }
                             DropdownMenu(

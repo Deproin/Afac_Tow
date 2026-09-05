@@ -90,6 +90,60 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {}
 }
 
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        try {
+            db.execSQL("ALTER TABLE users ADD COLUMN defaultWarehouseId INTEGER DEFAULT NULL")
+        } catch (e: Exception) {}
+        try {
+            db.execSQL("ALTER TABLE users ADD COLUMN defaultSafeAccountId INTEGER DEFAULT NULL")
+        } catch (e: Exception) {}
+    }
+}
+
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        try {
+            db.execSQL("ALTER TABLE users ADD COLUMN defaultWarehouseId INTEGER DEFAULT NULL")
+        } catch (e: Exception) {}
+        try {
+            db.execSQL("ALTER TABLE users ADD COLUMN defaultSafeAccountId INTEGER DEFAULT NULL")
+        } catch (e: Exception) {}
+    }
+}
+
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `item_stocks` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                `syncId` TEXT NOT NULL, 
+                `itemId` INTEGER NOT NULL, 
+                `warehouseId` INTEGER NOT NULL, 
+                `quantity` REAL NOT NULL, 
+                `syncState` TEXT NOT NULL, 
+                `updatedAt` INTEGER NOT NULL, 
+                `isDeleted` INTEGER NOT NULL,
+                FOREIGN KEY(`itemId`) REFERENCES `items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(`warehouseId`) REFERENCES `warehouses`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_item_stocks_itemId` ON `item_stocks` (`itemId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_item_stocks_warehouseId` ON `item_stocks` (`warehouseId`)")
+        
+        try {
+            db.execSQL("ALTER TABLE invoices ADD COLUMN warehouseId INTEGER DEFAULT NULL")
+        } catch (e: Exception) {}
+        
+        // Seed initial data: move existing quantities to main warehouse (ID 1)
+        db.execSQL("""
+            INSERT INTO item_stocks (syncId, itemId, warehouseId, quantity, syncState, updatedAt, isDeleted)
+            SELECT lower(hex(randomblob(16))), id, 1, currentQuantity, 'PENDING_ADD', strftime('%s','now') * 1000, 0
+            FROM items WHERE currentQuantity > 0
+        """.trimIndent())
+    }
+}
+
 val MIGRATION_1_10 = object : Migration(1, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // Safe migration for any legacy db version 1 to 10
@@ -176,9 +230,10 @@ val MIGRATION_1_10 = object : Migration(1, 10) {
         Currency::class,
         Remittance::class,
         CurrencyExchange::class,
-        AccountBalance::class
+        AccountBalance::class,
+        ItemStock::class
     ],
-    version = 10,
+    version = 12,
     exportSchema = false
 )
 
@@ -187,6 +242,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
     abstract fun itemUnitDao(): ItemUnitDao
     abstract fun warehouseDao(): WarehouseDao
+    abstract fun itemStockDao(): ItemStockDao
     abstract fun stockTransferDao(): StockTransferDao
     abstract fun contactDao(): ContactDao
     abstract fun invoiceDao(): InvoiceDao
@@ -215,7 +271,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_1_10
+                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_1_10
                 )
                 .build()
                 INSTANCE = instance
