@@ -982,8 +982,8 @@ class AppRepository(context: Context) {
                             }
                             accountDao.updateAccount(acc.copy(balance = acc.balance + change))
                         }
-                        journalDao.deleteEntryLine(line)
                     }
+                    journalDao.deleteLinesForEntry(journalEntry.id)
                     journalDao.deleteEntry(journalEntry)
                 }
                 if (oldTx.referenceType == "CONTACT" && oldTx.referenceId != null) {
