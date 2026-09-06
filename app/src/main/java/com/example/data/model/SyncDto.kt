@@ -247,18 +247,18 @@ data class ItemStockDto(
     @Json(name = "isdeleted") val isDeleted: Boolean = false
 )
 
-@kotlinx.serialization.Serializable
+@JsonClass(generateAdapter = true)
 data class PartnerDto(
-    val id: Long? = null,
-    val sync_id: String,
-    val company_id: String,
-    val name: String,
-    val percentage: Double,
-    val capital_account_id: Long?,
-    val current_account_id: Long?,
-    val notes: String?,
-    val is_deleted: Boolean,
-    val updated_at: Long
+    @Json(name = "id") val id: Long? = null,
+    @Json(name = "sync_id") val sync_id: String,
+    @Json(name = "company_id") val company_id: String,
+    @Json(name = "name") val name: String,
+    @Json(name = "percentage") val percentage: Double,
+    @Json(name = "capital_account_id") val capital_account_id: Long?,
+    @Json(name = "current_account_id") val current_account_id: Long?,
+    @Json(name = "notes") val notes: String?,
+    @Json(name = "is_deleted") val is_deleted: Boolean,
+    @Json(name = "updated_at") val updated_at: Long
 )
 
 fun Partner.toDto(companyId: String): PartnerDto = PartnerDto(

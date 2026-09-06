@@ -19,7 +19,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Partner
-import com.example.ui.theme.*
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.AppViewModel
 
@@ -35,24 +34,24 @@ fun PartnersScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("إدارة الشركاء", color = Color.White, fontFamily = cairoFont) },
+                title = { Text("إدارة الشركاء", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = { onNavigate(AppScreen.SETTINGS) }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "رجوع", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryColor)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary)
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
-                containerColor = AccentColor
+                containerColor = MaterialTheme.colorScheme.secondary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "إضافة شريك", tint = Color.White)
             }
         },
-        containerColor = BackgroundColor
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -62,7 +61,7 @@ fun PartnersScreen(
         ) {
             if (partners.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("لا يوجد شركاء مسجلين", fontFamily = cairoFont, color = TextColor, fontSize = 18.sp)
+                    Text("لا يوجد شركاء مسجلين", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp)
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -91,7 +90,7 @@ fun PartnerItem(partner: Partner) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -103,24 +102,22 @@ fun PartnerItem(partner: Partner) {
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .background(PrimaryColor.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Business, contentDescription = null, tint = PrimaryColor)
+                Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = partner.name,
-                    fontFamily = cairoFont,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    color = TextColor
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (partner.notes.isNotBlank()) {
                     Text(
                         text = partner.notes,
-                        fontFamily = cairoFont,
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -129,14 +126,12 @@ fun PartnerItem(partner: Partner) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "${partner.percentage}%",
-                    fontFamily = cairoFont,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
-                    color = PrimaryColor
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "النسبة",
-                    fontFamily = cairoFont,
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
@@ -159,7 +154,6 @@ fun AddPartnerDialog(
         title = {
             Text(
                 "إضافة شريك جديد",
-                fontFamily = cairoFont,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -170,33 +164,33 @@ fun AddPartnerDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("اسم الشريك", fontFamily = cairoFont) },
+                    label = { Text("اسم الشريك") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryColor,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
                 OutlinedTextField(
                     value = percentage,
                     onValueChange = { percentage = it },
-                    label = { Text("النسبة (%)", fontFamily = cairoFont) },
+                    label = { Text("النسبة (%)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryColor,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("ملاحظات (اختياري)", fontFamily = cairoFont) },
+                    label = { Text("ملاحظات (اختياري)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryColor,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = Color.LightGray
                     )
                 )
@@ -210,15 +204,15 @@ fun AddPartnerDialog(
                         onAdd(name, p, notes)
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text("إضافة", fontFamily = cairoFont, color = Color.White)
+                Text("إضافة", color = Color.White)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("إلغاء", fontFamily = cairoFont, color = Color.Gray)
+                Text("إلغاء", color = Color.Gray)
             }
         },
         shape = RoundedCornerShape(16.dp),
