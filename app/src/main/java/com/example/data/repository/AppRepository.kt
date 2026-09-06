@@ -6,6 +6,7 @@ import com.example.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import androidx.room.withTransaction
 
@@ -1104,7 +1105,7 @@ class AppRepository(context: Context) {
 
     suspend fun distributeProfits(amount: Double, notes: String) = withContext(Dispatchers.IO) {
         db.withTransaction {
-            val partners = partnerDao.getAllPartnersList()
+            val partners = partnerDao.getAllPartners().first()
             if (partners.isEmpty()) return@withTransaction
 
             // Get or create "الأرباح المبقاة" (Retained Earnings) account

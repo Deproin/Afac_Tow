@@ -62,6 +62,26 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     var wName by remember { mutableStateOf("") }
     var wLoc by remember { mutableStateOf("") }
 
+    // Stock Transfer Form States
+    var transferFromWarehouse by remember { mutableStateOf<Warehouse?>(null) }
+    var transferToWarehouse by remember { mutableStateOf<Warehouse?>(null) }
+    var transferItem by remember { mutableStateOf<Item?>(null) }
+    var transferQtyInput by remember { mutableStateOf("1.0") }
+    var transferNotesInput by remember { mutableStateOf("") }
+
+    // Stock Settlement States
+    var selectedItemForSettlement by remember { mutableStateOf<Item?>(null) }
+    var newQtySettle by remember { mutableStateOf("") }
+
+    // Stock Supply Form States
+    var showStockSupplyDialog by remember { mutableStateOf(false) }
+    var showStockIssueDialog by remember { mutableStateOf(false) }
+    var supplyTargetItem by remember { mutableStateOf<Item?>(null) }
+    var supplyWarehouse by remember { mutableStateOf<Warehouse?>(null) }
+    var supplyQtyInput by remember { mutableStateOf("10.0") }
+    var supplyCostInput by remember { mutableStateOf("") }
+    var supplyNotesInput by remember { mutableStateOf("") }
+
     // Handle pendingDialogToOpen from Dashboard Quick Operations
     LaunchedEffect(viewModel.pendingDialogToOpen) {
         val pending = viewModel.pendingDialogToOpen
@@ -89,25 +109,7 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         }
     }
 
-    // Stock Transfer Form States
-    var transferFromWarehouse by remember { mutableStateOf<Warehouse?>(null) }
-    var transferToWarehouse by remember { mutableStateOf<Warehouse?>(null) }
-    var transferItem by remember { mutableStateOf<Item?>(null) }
-    var transferQtyInput by remember { mutableStateOf("1.0") }
-    var transferNotesInput by remember { mutableStateOf("") }
 
-    // Stock Settlement States
-    var selectedItemForSettlement by remember { mutableStateOf<Item?>(null) }
-    var newQtySettle by remember { mutableStateOf("") }
-
-    // Stock Supply Form States
-    var showStockSupplyDialog by remember { mutableStateOf(false) }
-    var showStockIssueDialog by remember { mutableStateOf(false) }
-    var supplyTargetItem by remember { mutableStateOf<Item?>(null) }
-    var supplyWarehouse by remember { mutableStateOf<Warehouse?>(null) }
-    var supplyQtyInput by remember { mutableStateOf("10.0") }
-    var supplyCostInput by remember { mutableStateOf("") }
-    var supplyNotesInput by remember { mutableStateOf("") }
 
     // Financial Inventory Metrics
     val totalStockValuation = remember(items) {

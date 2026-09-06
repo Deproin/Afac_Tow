@@ -34,6 +34,8 @@ fun PartnersScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("الشركاء والحصص", "توزيع الأرباح وإقفال الفترة")
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.calculateAvailableProfit()
@@ -98,7 +100,7 @@ fun PartnersScreen(
                     onDistribute = { amount, notes ->
                         viewModel.distributeProfits(amount, notes) {
                             android.widget.Toast.makeText(
-                                androidx.compose.ui.platform.LocalContext.current,
+                                context,
                                 "تم توزيع الأرباح بنجاح وتم توليد القيود المحاسبية",
                                 android.widget.Toast.LENGTH_LONG
                             ).show()
