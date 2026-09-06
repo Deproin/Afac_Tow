@@ -30,6 +30,7 @@ class AppRepository(context: Context) {
     val currencyDao = db.currencyDao()
     val remittanceDao = db.remittanceDao()
     val currencyExchangeDao = db.currencyExchangeDao()
+    val partnerDao = db.partnerDao()
 
     // Active User State
     var currentUser: User? = null
@@ -1049,6 +1050,51 @@ class AppRepository(context: Context) {
             invoiceDao.updateInvoice(invoice.copy(id = invId, subTotal = total, total = total))
             
             logOperation("صرف مخزني", "stock_issue", "صرف ${entries.size} أصناف من المستودع $warehouseId بقيمة $total. $generalNotes")
+        }
+    }
+
+    suspend fun createPartner(name: String, percentage: Double, notes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            // Find parent accounts under EQUITY (حقوق الملكية)
+            // First find "حقوق الملكية" which is typically code "3"
+            val equityAcc = accountDao.getAccountByCode("3")
+            if (equityAcc != null) {
+                // Ensure we have a parent for "رأس المال" (31) and "جاري الشركاء" (32) if they don't exist, we can just attach to EQUITY
+                // Let's create capital account
+                val capitalAcc = Account(
+                    code = "31" + System.currentTimeMillis().toString().takeLast(4),
+                    name = "رأس مال الشريك - $name",
+                    type = "EQUITY",
+                    parentId = equityAcc.id
+                )
+                val capitalAccId = accountDao.insertAccount(capitalAcc)
+
+                // Create current account
+                val currentAcc = Account(
+                    code = "32" + System.currentTimeMillis().toString().takeLast(4),
+                    name = "جاري الشريك - $name",
+                    type = "EQUITY",
+                    parentId = equityAcc.id
+                )
+                val currentAccId = accountDao.insertAccount(currentAcc)
+
+                val partner = Partner(
+                    name = name,
+                    percentage = percentage,
+                    notes = notes,
+                    capitalAccountId = capitalAccId,
+                    currentAccountId = currentAccId
+                )
+                partnerDao.insertPartner(partner)
+            } else {
+                // Fallback if EQUITY account is missing (should not happen due to seed)
+                val partner = Partner(
+                    name = name,
+                    percentage = percentage,
+                    notes = notes
+                )
+                partnerDao.insertPartner(partner)
+            }
         }
     }
 }

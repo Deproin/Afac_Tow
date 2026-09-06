@@ -272,4 +272,27 @@ interface SupabaseApiService {
         @Header("Authorization") auth: String,
         @Header("Prefer") prefer: String = "resolution=merge-duplicates"
     ): Response<Unit>
+
+    // --- Partners ---
+    @GET("rest/v1/partners")
+    suspend fun getPartners(
+        @Query("company_id") companyId: String,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String
+    ): Response<List<PartnerDto>>
+
+    @POST("rest/v1/partners")
+    suspend fun upsertPartner(
+        @Body partner: PartnerDto,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String,
+        @Header("Prefer") prefer: String = "resolution=merge-duplicates"
+    ): Response<Unit>
+
+    @DELETE("rest/v1/partners")
+    suspend fun deletePartner(
+        @Query("sync_id") syncId: String,
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") auth: String
+    ): Response<Unit>
 }

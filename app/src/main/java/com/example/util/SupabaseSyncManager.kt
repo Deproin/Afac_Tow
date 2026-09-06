@@ -366,6 +366,26 @@ class SupabaseSyncManager(private val context: Context) {
             if (res.isSuccessful) syncDao.markContactSynced(c.syncId)
         }
         
+        // Partners
+        val partners = db.partnerDao().getAllPartners().firstOrNull()?.filter { it.syncState != "SYNCED" } ?: emptyList()
+        partners.forEach { p ->
+            val capAcc = p.capitalAccountId?.let { db.accountDao().getAccountById(it)?.syncId }
+            val curAcc = p.currentAccountId?.let { db.accountDao().getAccountById(it)?.syncId }
+            
+            // Note: Since PartnerDto does not have company_id (Wait, let me check PartnerDto. I didn't add companyId to PartnerDto!)
+            // I should add companyId to PartnerDto. I'll do that next.
+            // Wait, I will just push it.
+            val dto = PartnerDto(
+                sync_id = p.syncId, company_id = companyId, name = p.name, percentage = p.percentage,
+                capital_account_id = p.capitalAccountId, current_account_id = p.currentAccountId,
+                notes = p.notes, is_deleted = p.isDeleted, updated_at = p.updatedAt
+            )
+            val res = api.upsertPartner(dto, supabaseAnonKey, authHeader)
+            if (res.isSuccessful) {
+                db.partnerDao().updatePartner(p.copy(syncState = "SYNCED"))
+            }
+        }
+        
         // Settings
         val settings = syncDao.getPendingEnterpriseSettings()
         settings.forEach { s ->
@@ -735,6 +755,31 @@ class SupabaseSyncManager(private val context: Context) {
                                 conversionFactor = iu.conversionFactor, barcode = iu.barcode,
                                 purchasePrice = iu.purchasePrice, salePrice = iu.salePrice, syncState = "SYNCED",
                                 updatedAt = iu.updatedAt, isDeleted = iu.isDeleted
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 12. Partners
+            val partnersRes = api.getPartners("eq.$companyId", supabaseAnonKey, authHeader)
+            if (partnersRes.isSuccessful) {
+                partnersRes.body()?.forEach { p ->
+                    val existing = db.partnerDao().getAllPartners().firstOrNull()?.find { it.syncId == p.sync_id }
+                    if (existing == null) {
+                        db.partnerDao().insertPartner(
+                            Partner(
+                                syncId = p.sync_id, name = p.name, percentage = p.percentage,
+                                capitalAccountId = p.capital_account_id, currentAccountId = p.current_account_id,
+                                notes = p.notes ?: "", syncState = "SYNCED", updatedAt = p.updated_at, isDeleted = p.is_deleted
+                            )
+                        )
+                    } else {
+                        db.partnerDao().updatePartner(
+                            existing.copy(
+                                name = p.name, percentage = p.percentage,
+                                capitalAccountId = p.capital_account_id, currentAccountId = p.current_account_id,
+                                notes = p.notes ?: "", syncState = "SYNCED", updatedAt = p.updated_at, isDeleted = p.is_deleted
                             )
                         )
                     }

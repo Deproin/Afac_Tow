@@ -649,6 +649,40 @@ fun SettingsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             }
 
 
+            // --- Partners Management Section ---
+            Text(
+                "إدارة الشركاء (Partners)",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "إضافة وإدارة الشركاء ونسبهم لتوزيع الأرباح والتكاليف بشكل آلي وإدارة حساباتهم الجارية.",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+
+                    Button(
+                        onClick = { viewModel.navigateTo(AppScreen.PARTNERS) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("إدارة الشركاء ونسب التوزيع 👥", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+            }
+
+
             // --- Multi-Currency Management Section ---
             Row(
                 modifier = Modifier.fillMaxWidth(),

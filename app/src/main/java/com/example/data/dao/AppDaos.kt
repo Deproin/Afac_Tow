@@ -431,3 +431,21 @@ interface AccountBalanceDao {
     @Update
     suspend fun updateBalance(accountBalance: AccountBalance)
 }
+
+@Dao
+interface PartnerDao {
+    @Query("SELECT * FROM partners WHERE isDeleted = 0 ORDER BY id ASC")
+    fun getAllPartners(): Flow<List<Partner>>
+
+    @Query("SELECT * FROM partners WHERE id = :id LIMIT 1")
+    suspend fun getPartnerById(id: Long): Partner?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPartner(partner: Partner): Long
+
+    @Update
+    suspend fun updatePartner(partner: Partner)
+
+    @Delete
+    suspend fun deletePartner(partner: Partner)
+}

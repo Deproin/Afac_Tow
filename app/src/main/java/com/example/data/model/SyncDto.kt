@@ -246,3 +246,42 @@ data class ItemStockDto(
     @Json(name = "updatedat") val updatedAt: Long = 0,
     @Json(name = "isdeleted") val isDeleted: Boolean = false
 )
+
+@kotlinx.serialization.Serializable
+data class PartnerDto(
+    val id: Long? = null,
+    val sync_id: String,
+    val company_id: String,
+    val name: String,
+    val percentage: Double,
+    val capital_account_id: Long?,
+    val current_account_id: Long?,
+    val notes: String?,
+    val is_deleted: Boolean,
+    val updated_at: Long
+)
+
+fun Partner.toDto(companyId: String): PartnerDto = PartnerDto(
+    sync_id = this.syncId,
+    company_id = companyId,
+    name = this.name,
+    percentage = this.percentage,
+    capital_account_id = this.capitalAccountId,
+    current_account_id = this.currentAccountId,
+    notes = this.notes,
+    is_deleted = this.isDeleted,
+    updated_at = this.updatedAt
+)
+
+fun PartnerDto.toEntity(): Partner = Partner(
+    id = 0, // Generated locally
+    syncId = this.sync_id,
+    name = this.name,
+    percentage = this.percentage,
+    capitalAccountId = this.capital_account_id,
+    currentAccountId = this.current_account_id,
+    notes = this.notes ?: "",
+    syncState = "SYNCED",
+    updatedAt = this.updated_at,
+    isDeleted = this.is_deleted
+)

@@ -424,6 +424,21 @@ data class Currency(
     val isDeleted: Boolean = false
 )
 
+@Entity(tableName = "partners")
+data class Partner(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val syncId: String = UUID.randomUUID().toString(),
+    val name: String,
+    val percentage: Double = 0.0, // نسبة الشراكة (0 - 100)
+    val capitalAccountId: Long? = null, // حساب رأس مال الشريك
+    val currentAccountId: Long? = null, // حساب جاري الشريك
+    val notes: String = "",
+    
+    val syncState: String = "PENDING_ADD",
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+)
+
 fun getArabicAccountType(type: String): String {
     return when (type) {
         "ASSETS" -> "أصول"

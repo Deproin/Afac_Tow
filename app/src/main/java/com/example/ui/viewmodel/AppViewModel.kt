@@ -40,7 +40,8 @@ enum class AppScreen {
     SETTINGS,
     AI_ASSISTANT,
     LICENSE,
-    OPERATIONS
+    OPERATIONS,
+    PARTNERS
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -247,6 +248,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EnterpriseSetting())
 
     val currencies = repository.currencyDao.getAllCurrencies()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val partners = repository.partnerDao.getAllPartners()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
@@ -1204,6 +1208,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setReportCurrency(currency: String) {
         _selectedReportCurrency.value = currency
+    }
+
+    fun createPartner(name: String, percentage: Double, notes: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            repository.createPartner(name, percentage, notes)
+            onComplete()
+        }
     }
 }
 

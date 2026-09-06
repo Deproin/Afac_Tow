@@ -124,6 +124,11 @@ class MainActivity : ComponentActivity() {
                                 onNavigate = { target -> appViewModel.navigateTo(target) },
                                 onBack = { appViewModel.navigateTo(AppScreen.DASHBOARD) }
                             )
+
+                            AppScreen.PARTNERS -> com.example.ui.screens.PartnersScreen(
+                                viewModel = appViewModel,
+                                onNavigate = { target -> appViewModel.navigateTo(target) }
+                            )
                         }
 
                     }
