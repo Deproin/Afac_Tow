@@ -21,9 +21,19 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    val envFile = rootProject.file(".env")
+    val envMap = mutableMapOf<String, String>()
+    if (envFile.exists()) {
+        envFile.readLines().forEach { line ->
+            if (line.isNotBlank() && !line.startsWith("#") && line.contains("=")) {
+                val split = line.split("=", limit = 2)
+                envMap[split[0].trim()] = split[1].trim().removeSurrounding("\"")
+            }
+        }
+    }
     
-    val envSupabaseUrl = System.getenv("SUPABASE_URL") ?: project.findProperty("SUPABASE_URL") as String? ?: ""
-    val envSupabaseKey = System.getenv("SUPABASE_ANON_KEY") ?: project.findProperty("SUPABASE_ANON_KEY") as String? ?: ""
+    val envSupabaseUrl = System.getenv("SUPABASE_URL") ?: envMap["SUPABASE_URL"] ?: project.findProperty("SUPABASE_URL") as String? ?: ""
+    val envSupabaseKey = System.getenv("SUPABASE_ANON_KEY") ?: envMap["SUPABASE_ANON_KEY"] ?: project.findProperty("SUPABASE_ANON_KEY") as String? ?: ""
     buildConfigField("String", "SUPABASE_URL", "\"$envSupabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$envSupabaseKey\"")
   }

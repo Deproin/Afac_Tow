@@ -361,45 +361,47 @@ class AppRepository(context: Context) {
         val mainDesc = tx.mainAccountNotes.ifEmpty { tx.notes.ifEmpty { "سند ${if (tx.type == "RECEIPT") "قبض" else "صرف"} - طرف الخزينة/البنك" } }
         val counterpartDesc = tx.counterpartAccountNotes.ifEmpty { tx.notes.ifEmpty { "سند ${if (tx.type == "RECEIPT") "قبض" else "صرف"} - الطرف المقابل" } }
 
+        val localAmount = tx.amount * tx.exchangeRate
+
         if (tx.type == "RECEIPT") {
             // Receipt: Debit Main Cash/Bank (+), Credit Counterpart (-)
             mainCashAccount?.let { acc ->
-                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = tx.amount, credit = 0.0, description = mainDesc))
-                accountDao.updateAccount(acc.copy(balance = acc.balance + tx.amount))
+                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = localAmount, credit = 0.0, description = mainDesc))
+                accountDao.updateAccount(acc.copy(balance = acc.balance + localAmount))
             }
             counterpartAccount?.let { acc ->
-                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = 0.0, credit = tx.amount, description = counterpartDesc))
+                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = 0.0, credit = localAmount, description = counterpartDesc))
                 val newBal = when (acc.type) {
-                    "ASSETS" -> acc.balance - tx.amount
-                    "LIABILITIES", "EQUITY", "REVENUE" -> acc.balance + tx.amount
-                    else -> acc.balance - tx.amount
+                    "ASSETS" -> acc.balance - localAmount
+                    "LIABILITIES", "EQUITY", "REVENUE" -> acc.balance + localAmount
+                    else -> acc.balance - localAmount
                 }
                 accountDao.updateAccount(acc.copy(balance = newBal))
             }
             if (tx.referenceType == "CONTACT" && tx.referenceId != null) {
                 contactDao.getContactById(tx.referenceId)?.let { contact ->
-                    contactDao.updateContact(contact.copy(balance = contact.balance - tx.amount))
+                    contactDao.updateContact(contact.copy(balance = contact.balance - localAmount))
                 }
             }
         } else {
             // Payment: Debit Counterpart (+), Credit Main Cash/Bank (-)
             counterpartAccount?.let { acc ->
-                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = tx.amount, credit = 0.0, description = counterpartDesc))
+                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = localAmount, credit = 0.0, description = counterpartDesc))
                 val newBal = when (acc.type) {
-                    "ASSETS", "EXPENSES" -> acc.balance + tx.amount
-                    "LIABILITIES", "EQUITY", "REVENUE" -> acc.balance - tx.amount
-                    else -> acc.balance + tx.amount
+                    "ASSETS", "EXPENSES" -> acc.balance + localAmount
+                    "LIABILITIES", "EQUITY", "REVENUE" -> acc.balance - localAmount
+                    else -> acc.balance + localAmount
                 }
                 accountDao.updateAccount(acc.copy(balance = newBal))
             }
             mainCashAccount?.let { acc ->
-                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = 0.0, credit = tx.amount, description = mainDesc))
-                accountDao.updateAccount(acc.copy(balance = acc.balance - tx.amount))
+                journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = acc.id, debit = 0.0, credit = localAmount, description = mainDesc))
+                accountDao.updateAccount(acc.copy(balance = acc.balance - localAmount))
             }
 
             if (tx.referenceType == "CONTACT" && tx.referenceId != null) {
                 contactDao.getContactById(tx.referenceId)?.let { contact ->
-                    contactDao.updateContact(contact.copy(balance = contact.balance - tx.amount))
+                    contactDao.updateContact(contact.copy(balance = contact.balance - localAmount))
                 }
             }
         }
@@ -801,12 +803,75 @@ class AppRepository(context: Context) {
 
 
     suspend fun updateCashTransaction(tx: CashTransaction) = withContext(Dispatchers.IO) {
-        cashTransactionDao.updateCashTransaction(tx)
+        db.withTransaction {
+            val oldTx = cashTransactionDao.getCashTransactionById(tx.id)
+            if (oldTx != null) {
+                // Reverse old transaction accounting
+                val journalEntry = journalDao.getEntryByReference(oldTx.id, "CASH_TX")
+                if (journalEntry != null) {
+                    val lines = journalDao.getLinesForEntry(journalEntry.id)
+                    for (line in lines) {
+                        val account = accountDao.getAccountById(line.accountId)
+                        account?.let { acc ->
+                            val debitDiff = -line.debit
+                            val creditDiff = -line.credit
+                            val change = when (acc.type) {
+                                "ASSETS", "EXPENSES" -> debitDiff - creditDiff
+                                "LIABILITIES", "EQUITY", "REVENUE" -> creditDiff - debitDiff
+                                else -> debitDiff - creditDiff
+                            }
+                            accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                        }
+                        journalDao.deleteEntryLine(line)
+                    }
+                    journalDao.deleteEntry(journalEntry)
+                }
+                if (oldTx.referenceType == "CONTACT" && oldTx.referenceId != null) {
+                    val oldLocalAmount = oldTx.amount * oldTx.exchangeRate
+                    contactDao.getContactById(oldTx.referenceId)?.let { contact ->
+                        contactDao.updateContact(contact.copy(balance = contact.balance + oldLocalAmount))
+                    }
+                }
+            }
+            
+            // Delete old transaction and create new one (which re-adds journals)
+            cashTransactionDao.deleteCashTransaction(tx) // Deletes based on ID
+            createCashTransaction(tx)
+        }
         logOperation("تعديل", "cash_transactions", "تم تعديل السند رقم ${tx.id}")
     }
 
     suspend fun deleteCashTransaction(tx: CashTransaction) = withContext(Dispatchers.IO) {
-        cashTransactionDao.deleteCashTransaction(tx)
+        db.withTransaction {
+            val journalEntry = journalDao.getEntryByReference(tx.id, "CASH_TX")
+            if (journalEntry != null) {
+                val lines = journalDao.getLinesForEntry(journalEntry.id)
+                for (line in lines) {
+                    val account = accountDao.getAccountById(line.accountId)
+                    account?.let { acc ->
+                        val debitDiff = -line.debit
+                        val creditDiff = -line.credit
+                        val change = when (acc.type) {
+                            "ASSETS", "EXPENSES" -> debitDiff - creditDiff
+                            "LIABILITIES", "EQUITY", "REVENUE" -> creditDiff - debitDiff
+                            else -> debitDiff - creditDiff
+                        }
+                        accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                    }
+                    journalDao.deleteEntryLine(line)
+                }
+                journalDao.deleteEntry(journalEntry)
+            }
+            
+            if (tx.referenceType == "CONTACT" && tx.referenceId != null) {
+                val localAmount = tx.amount * tx.exchangeRate
+                contactDao.getContactById(tx.referenceId)?.let { contact ->
+                    contactDao.updateContact(contact.copy(balance = contact.balance + localAmount))
+                }
+            }
+
+            cashTransactionDao.deleteCashTransaction(tx)
+        }
         logOperation("حذف", "cash_transactions", "تم حذف السند رقم ${tx.id}")
     }
 
@@ -989,6 +1054,37 @@ class AppRepository(context: Context) {
             
             invoiceDao.updateInvoice(invoice.copy(id = invId, subTotal = total, total = total))
             
+            // Create Journal Entry for Stock Supply
+            if (total > 0) {
+                val entryNum = "JV-SUP-" + System.currentTimeMillis() / 1000
+                val jEntryId = journalDao.insertEntry(
+                    JournalEntry(
+                        entryNumber = entryNum,
+                        description = "قيد تلقائي لتوريد مخزني رقم $invoiceNum",
+                        referenceId = invId,
+                        referenceType = "INVOICE",
+                        currencyCode = "ر.ي" // local currency
+                    )
+                )
+                
+                val invAcc = accountDao.getAccountByCode("1103")
+                var adjAcc = accountDao.getAccountByCode("3102") // Stock Adjustments / Opening Balance
+                if (adjAcc == null) {
+                    val equityParent = accountDao.getAccountByCode("3")
+                    val insertedId = accountDao.insertAccount(Account(code = "3102", name = "تسويات مخزنية ورأس مال", type = "EQUITY", parentId = equityParent?.id))
+                    adjAcc = accountDao.getAccountById(insertedId)
+                }
+
+                invAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = total, credit = 0.0, description = "توريد مخزني"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + total))
+                }
+                adjAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = total, description = "توريد مخزني مقابل تسويات"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + total)) // EQUITY increases by credit
+                }
+            }
+
             logOperation("توريد مخزني", "stock_supply", "توريد ${entries.size} أصناف للمستودع $warehouseId بقيمة $total. $generalNotes")
         }
     }
@@ -1052,6 +1148,37 @@ class AppRepository(context: Context) {
             
             invoiceDao.updateInvoice(invoice.copy(id = invId, subTotal = total, total = total))
             
+            // Create Journal Entry for Stock Issue
+            if (total > 0) {
+                val entryNum = "JV-ISS-" + System.currentTimeMillis() / 1000
+                val jEntryId = journalDao.insertEntry(
+                    JournalEntry(
+                        entryNumber = entryNum,
+                        description = "قيد تلقائي لصرف مخزني رقم $invoiceNum",
+                        referenceId = invId,
+                        referenceType = "INVOICE",
+                        currencyCode = "ر.ي" // local currency
+                    )
+                )
+                
+                val invAcc = accountDao.getAccountByCode("1103")
+                var adjAcc = accountDao.getAccountByCode("5104") // Stock Adjustments Expenses
+                if (adjAcc == null) {
+                    val expensesParent = accountDao.getAccountByCode("5")
+                    val insertedId = accountDao.insertAccount(Account(code = "5104", name = "خسائر وتسويات مخزنية", type = "EXPENSES", parentId = expensesParent?.id))
+                    adjAcc = accountDao.getAccountById(insertedId)
+                }
+
+                adjAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = total, credit = 0.0, description = "صرف مخزني مقابل تسويات"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + total)) // EXPENSES increases by debit
+                }
+                invAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = total, description = "صرف مخزني"))
+                    accountDao.updateAccount(it.copy(balance = it.balance - total)) // ASSETS decreases by credit
+                }
+            }
+
             logOperation("صرف مخزني", "stock_issue", "صرف ${entries.size} أصناف من المستودع $warehouseId بقيمة $total. $generalNotes")
         }
     }

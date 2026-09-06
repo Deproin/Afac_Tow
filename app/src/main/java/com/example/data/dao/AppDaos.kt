@@ -342,6 +342,9 @@ interface CashTransactionDao {
 
     @Delete
     suspend fun deleteCashTransaction(transaction: CashTransaction)
+    
+    @Query("SELECT * FROM cash_transactions WHERE id = :id")
+    suspend fun getCashTransactionById(id: Long): CashTransaction?
 
     @Query("SELECT COUNT(*) FROM cash_transactions WHERE isDeleted = 0")
     fun countCashTransactionsFlow(): Flow<Int>
