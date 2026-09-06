@@ -520,6 +520,19 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
     var showAddAccountDialog by remember { mutableStateOf(false) }
     var showAddVoucherDialog by remember { mutableStateOf(false) }
     var showAddJournalEntryDialog by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(viewModel.pendingDialogToOpen) {
+        val pending = viewModel.pendingDialogToOpen
+        if (pending != null) {
+            when (pending) {
+                "NEW_ENTRY" -> {
+                    selectedTab = 1
+                    showAddJournalEntryDialog = true
+                }
+            }
+            viewModel.pendingDialogToOpen = null
+        }
+    }
 
     // Add Account fields
     var accCode by remember { mutableStateOf("") }

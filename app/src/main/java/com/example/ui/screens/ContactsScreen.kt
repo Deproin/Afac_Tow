@@ -58,6 +58,23 @@ fun ContactsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
     var showAddContactDialog by remember { mutableStateOf(false) }
     var selectedContactForEdit by remember { mutableStateOf<Contact?>(null) }
+    
+    LaunchedEffect(viewModel.pendingDialogToOpen) {
+        val pending = viewModel.pendingDialogToOpen
+        if (pending != null) {
+            when (pending) {
+                "NEW_CUSTOMER" -> {
+                    selectedTab = 0
+                    showAddContactDialog = true
+                }
+                "NEW_SUPPLIER" -> {
+                    selectedTab = 1
+                    showAddContactDialog = true
+                }
+            }
+            viewModel.pendingDialogToOpen = null
+        }
+    }
     var selectedContactForStatement by remember { mutableStateOf<Contact?>(null) }
     var selectedContactForVoucher by remember { mutableStateOf<Contact?>(null) }
 

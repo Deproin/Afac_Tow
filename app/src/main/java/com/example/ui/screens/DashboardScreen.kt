@@ -1186,83 +1186,86 @@ fun QuickActionsList(
     val actions = listOf(
         QuickAction("فاتورة مبيعات", Icons.Default.PointOfSale, AppScreen.SALES, null, Color(0xFF0061A4)),
         QuickAction("فاتورة مشتريات", Icons.Default.ShoppingCart, AppScreen.PURCHASES, null, Color(0xFFC62828)),
-        QuickAction("سند قبض (استلام نقدية)", Icons.Default.AddCard, null, "RECEIPT", Color(0xFF1B5E20)),
-        QuickAction("سند صرف (دفع نقدية)", Icons.Default.MoneyOff, null, "PAYMENT", Color(0xFFB71C1C)),
+        QuickAction("مرتجع مبيعات", Icons.Default.AssignmentReturn, AppScreen.SALES_RETURN, null, Color(0xFFE65100)),
+        QuickAction("مرتجع مشتريات", Icons.Default.AssignmentReturned, AppScreen.PURCHASES_RETURN, null, Color(0xFFD84315)),
+        QuickAction("سند قبض (استلام)", Icons.Default.AddCard, null, "RECEIPT", Color(0xFF1B5E20)),
+        QuickAction("سند صرف (دفع)", Icons.Default.MoneyOff, null, "PAYMENT", Color(0xFFB71C1C)),
+        QuickAction("قيد يومي", Icons.Default.AccountTree, AppScreen.JOURNAL_ENTRIES, "NEW_ENTRY", Color(0xFF455A64)),
+        QuickAction("إضافة عميل", Icons.Default.PersonAdd, AppScreen.CONTACTS, "NEW_CUSTOMER", Color(0xFF0288D1)),
+        QuickAction("إضافة مورد", Icons.Default.DomainAdd, AppScreen.CONTACTS, "NEW_SUPPLIER", Color(0xFF00796B)),
+        QuickAction("إضافة صنف", Icons.Default.AddBox, AppScreen.INVENTORY, "NEW_ITEM", Color(0xFF7B1FA2)),
         QuickAction("سند توريد مخزني", Icons.Default.Inventory, null, "STOCK_SUPPLY", Color(0xFF7B1FA2)),
         QuickAction("سند تحويل مخزني", Icons.Default.LocalShipping, null, "STOCK_TRANSFER", Color(0xFF0288D1)),
-        QuickAction("سند صرف مخزني", Icons.Default.Output, null, "STOCK_ISSUE", Color(0xFFE65100)),
-        QuickAction("سجل وإدارة العمليات", Icons.Default.HistoryEdu, AppScreen.OPERATIONS, null, Color(0xFF1E88E5)),
-        QuickAction("حوالة مالية", Icons.Default.Send, null, "REMITTANCE", Color(0xFF0288D1)),
-        QuickAction("صرف عملات", Icons.Default.CurrencyExchange, null, "EXCHANGE", Color(0xFF2E7D32)),
-        QuickAction("الأصناف والمخازن", Icons.Default.Category, AppScreen.INVENTORY, null, Color(0xFF7B1FA2)),
-        QuickAction("العملاء والموردين", Icons.Default.ContactPage, AppScreen.CONTACTS, null, Color(0xFF0288D1)),
-        QuickAction("الصندوق والبنك", Icons.Default.AccountBalanceWallet, AppScreen.TREASURY, null, Color(0xFF00796B)),
-        QuickAction("دليل الحسابات وقيود اليومية", Icons.Default.AccountTree, AppScreen.JOURNAL_ENTRIES, null, Color(0xFFEF6C00)),
-        QuickAction("التقارير الشاملة", Icons.Default.Assessment, AppScreen.REPORTS, null, Color(0xFF455A64)),
-        QuickAction("المساعد الذكي", Icons.Default.SmartToy, AppScreen.AI_ASSISTANT, null, Color(0xFF3F51B5)),
-        QuickAction("إعدادات المؤسسة", Icons.Default.Settings, AppScreen.SETTINGS, null, Color(0xFF00897B))
+        QuickAction("سند صرف مخزني", Icons.Default.Output, null, "STOCK_ISSUE", Color(0xFFE65100))
     )
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        actions.forEach { action ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
-                    .clickable {
-                        if (action.actionKey == "RECEIPT" || action.actionKey == "PAYMENT") {
-                            viewModel.navigateWithDialog(AppScreen.TREASURY, action.actionKey, onNavigate)
-                        } else if (action.actionKey?.startsWith("STOCK_") == true) {
-                            viewModel.navigateWithDialog(AppScreen.INVENTORY, action.actionKey, onNavigate)
-                        } else if (action.screen != null) {
-                            onNavigate(action.screen)
-                        } else if (action.actionKey != null) {
-                            onCustomAction(action.actionKey)
-                        }
-                    },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        actions.chunked(2).forEach { rowActions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    // Colored vertical strip for premium look
-                    Spacer(
+                rowActions.forEach { action ->
+                    Card(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .width(6.dp)
-                            .background(action.color)
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(1f)
+                            .height(90.dp)
+                            .clickable {
+                                if (action.screen != null && action.actionKey != null) {
+                                    viewModel.navigateWithDialog(action.screen, action.actionKey, onNavigate)
+                                } else if (action.actionKey == "RECEIPT" || action.actionKey == "PAYMENT") {
+                                    viewModel.navigateWithDialog(AppScreen.TREASURY, action.actionKey, onNavigate)
+                                } else if (action.actionKey?.startsWith("STOCK_") == true) {
+                                    viewModel.navigateWithDialog(AppScreen.INVENTORY, action.actionKey, onNavigate)
+                                } else if (action.screen != null) {
+                                    onNavigate(action.screen)
+                                } else if (action.actionKey != null) {
+                                    onCustomAction(action.actionKey)
+                                }
+                            },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(action.color.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(action.icon, contentDescription = null, tint = action.color, modifier = Modifier.size(24.dp))
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(4.dp)
+                                    .background(action.color)
+                            )
+                            
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(12.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .background(action.color.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(action.icon, contentDescription = null, tint = action.color, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = action.title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    lineHeight = 16.sp
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            text = action.title,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Icon(
-                            Icons.Default.ArrowBackIosNew,
-                            contentDescription = null,
-                            tint = Color.Gray.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
-                        )
                     }
+                }
+                if (rowActions.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
