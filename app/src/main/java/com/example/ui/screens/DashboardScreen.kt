@@ -376,11 +376,18 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
     val isAdminUser = currentUserState?.username.equals("admin", ignoreCase = true) || currentUserState?.permSettings == true
     val userName = currentUserState?.username?.takeIf { it.isNotBlank() } ?: "المدير العام"
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp,
+        shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -509,6 +516,7 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
                     )
                 }
             }
+        }
         }
     }
 }
