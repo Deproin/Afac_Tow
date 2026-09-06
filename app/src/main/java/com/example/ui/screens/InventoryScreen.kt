@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.model.Item
 import com.example.data.model.ItemUnit
+import com.example.data.model.ItemStock
 import com.example.data.model.Warehouse
 import com.example.ui.viewmodel.AppViewModel
 

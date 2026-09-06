@@ -443,7 +443,7 @@ class AppRepository(context: Context) {
         // 1. Reverse Inventory (Stock)
         val itemsList = invoiceDao.getItemsForInvoice(invoice.id)
         for (invItem in itemsList) {
-            val qtyInBaseUnit = if (invItem.unitConversionFactor > 0) invItem.quantity * invItem.unitConversionFactor else invItem.quantity
+            val qtyInBaseUnit = if (invItem.conversionFactor > 0) invItem.quantity * invItem.conversionFactor else invItem.quantity
             val item = itemDao.getItemById(invItem.itemId)
             if (item != null) {
                 // Reverse Warehouse Stock

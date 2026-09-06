@@ -82,7 +82,6 @@ fun ContactsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         contacts.filter { it.type == "SUPPLIER" }.sumOf { it.balance }
     }
 
-    val context = LocalContext.current
     var showExcelMenu by remember { mutableStateOf(false) }
 
     val contactsCsvPickerLauncher = rememberLauncherForActivityResult(
