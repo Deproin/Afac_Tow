@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
@@ -47,6 +48,8 @@ fun ContactsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val cashTransactions by viewModel.cashTransactions.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+    val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("العملاء", "الموردين")

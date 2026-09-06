@@ -512,6 +512,7 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
     val contacts by viewModel.contacts.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val context = LocalContext.current
 
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
     val tabs = listOf("دليل الحسابات", "القيود اليومية", "سندات القبض والصرف")

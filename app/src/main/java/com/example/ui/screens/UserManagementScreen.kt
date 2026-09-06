@@ -242,6 +242,10 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
         // Add User Dialog with Role Preset Selector
         if (showAddDialog) {
             var selectedRolePreset by remember { mutableStateOf("CASHIER") }
+            var selWhId by remember { mutableStateOf<Long?>(null) }
+            var whExpanded by remember { mutableStateOf(false) }
+            var selAccId by remember { mutableStateOf<Long?>(null) }
+            var accExpanded by remember { mutableStateOf(false) }
 
             AlertDialog(
                 onDismissRequest = { showAddDialog = false },
@@ -289,8 +293,6 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
                         Divider()
                         
-                        var selWhId by remember { mutableStateOf<Long?>(null) }
-                        var whExpanded by remember { mutableStateOf(false) }
                         val selectedWhName = warehouses.find { it.id == selWhId }?.name ?: "الكل (بدون تقييد)"
                         
                         ExposedDropdownMenuBox(expanded = whExpanded, onExpandedChange = { whExpanded = it }) {
@@ -309,8 +311,6 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                             }
                         }
 
-                        var selAccId by remember { mutableStateOf<Long?>(null) }
-                        var accExpanded by remember { mutableStateOf(false) }
                         val selectedAccName = accounts.find { it.id == selAccId }?.name ?: "الكل (بدون تقييد)"
                         
                         ExposedDropdownMenuBox(expanded = accExpanded, onExpandedChange = { accExpanded = it }) {
@@ -509,6 +509,7 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                     TextButton(onClick = { selectedUserForEdit = null }) { Text("إلغاء") }
                 }
             )
+        }
         // Reset Password Dialog for Admin
         if (selectedUserForPasswordReset != null) {
             val user = selectedUserForPasswordReset!!
@@ -544,6 +545,7 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 }
             )
         }
+    }
 }
 
 @Composable
