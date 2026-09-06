@@ -101,16 +101,7 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
-val MIGRATION_10_11 = object : Migration(10, 11) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        try {
-            db.execSQL("ALTER TABLE users ADD COLUMN defaultWarehouseId INTEGER DEFAULT NULL")
-        } catch (e: Exception) {}
-        try {
-            db.execSQL("ALTER TABLE users ADD COLUMN defaultSafeAccountId INTEGER DEFAULT NULL")
-        } catch (e: Exception) {}
-    }
-}
+
 
 val MIGRATION_11_12 = object : Migration(11, 12) {
     override fun migrate(db: SupportSQLiteDatabase) {

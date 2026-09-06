@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
+import androidx.room.withTransaction
 
 class AppRepository(context: Context) {
     private val db = AppDatabase.getDatabase(context)
@@ -442,6 +443,7 @@ class AppRepository(context: Context) {
         // 1. Reverse Inventory (Stock)
         val itemsList = invoiceDao.getItemsForInvoice(invoice.id)
         for (invItem in itemsList) {
+            val qtyInBaseUnit = if (invItem.unitConversionFactor > 0) invItem.quantity * invItem.unitConversionFactor else invItem.quantity
             val item = itemDao.getItemById(invItem.itemId)
             if (item != null) {
                 // Reverse Warehouse Stock
