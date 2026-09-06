@@ -1212,7 +1212,7 @@ fun QuickActionsList(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .height(90.dp)
+                            .height(110.dp)
                             .clickable {
                                 if (action.screen != null && action.actionKey != null) {
                                     viewModel.navigateWithDialog(action.screen, action.actionKey, onNavigate)
@@ -1226,37 +1226,44 @@ fun QuickActionsList(
                                     onCustomAction(action.actionKey)
                                 }
                             },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        border = BorderStroke(1.dp, action.color.copy(alpha = 0.15f))
                     ) {
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(4.dp)
-                                    .background(action.color)
-                            )
-                            
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.surface,
+                                            action.color.copy(alpha = 0.05f)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Column(
-                                modifier = Modifier.fillMaxSize().padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.Start
+                                modifier = Modifier.padding(8.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
-                                        .background(action.color.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                        .size(46.dp)
+                                        .background(action.color.copy(alpha = 0.12f), CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(action.icon, contentDescription = null, tint = action.color, modifier = Modifier.size(20.dp))
+                                    Icon(action.icon, contentDescription = null, tint = action.color, modifier = Modifier.size(24.dp))
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = action.title,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface,
+                                    textAlign = TextAlign.Center,
                                     maxLines = 2,
                                     lineHeight = 16.sp
                                 )
