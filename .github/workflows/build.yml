@@ -28,20 +28,12 @@ jobs:
       with:
         gradle-version: '9.3.1'
 
-    - name: Prepare Release Keystore (Auto-Generate on Cloud if Secrets not set)
-      run: |
-        if [ -n "${{ secrets.SIGNING_KEY_BASE64 }}" ]; then
-          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 --decode > android_release_key.jks
-        else
-          keytool -genkeypair -v -keystore android_release_key.jks -alias afaq_key -keyalg RSA -keysize 2048 -validity 10000 -storepass afaq123456 -keypass afaq123456 -dname "CN=Afaq Accountant, OU=Mobile, O=Afaq, L=Sanaa, ST=Sanaa, C=YE"
-        fi
-
     - name: Get SHA-1 Fingerprint
-      run: keytool -list -v -keystore android_release_key.jks -alias afaq_key -storepass afaq123456 | grep SHA1
+      run: keytool -list -v -keystore afaq_accountant_key.jks -alias afaq_key -storepass afaq123456 | grep SHA1
 
     - name: Build Fast Signed Release APK
       env:
-        KEYSTORE_PATH: ${{ github.workspace }}/android_release_key.jks
+        KEYSTORE_PATH: ${{ github.workspace }}/afaq_accountant_key.jks
         STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'afaq123456' }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'afaq_key' }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'afaq123456' }}

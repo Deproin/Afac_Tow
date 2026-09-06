@@ -198,17 +198,19 @@ class AppRepository(context: Context) {
         val salesAcc = accountDao.getAccountByCode("4101")
         val cogsAcc = accountDao.getAccountByCode("5101")
         val purchAcc = accountDao.getAccountByCode("5102")
+        
+        val localTotal = invoice.total * invoice.exchangeRate
 
         when (invoice.type) {
             "SALE_CASH" -> {
                 // Debit Cash, Credit Sales
                 cashAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "المبيعات النقدية"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "المبيعات النقدية"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                 }
                 salesAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "المبيعات النقدية"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total)) // Revenue increases by credit
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "المبيعات النقدية"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal)) // Revenue increases by credit
                 }
                 // COGS: Debit COGS, Credit Inventory
                 cogsAcc?.let {
@@ -223,12 +225,12 @@ class AppRepository(context: Context) {
             "SALE_CREDIT" -> {
                 // Debit Receivables, Credit Sales
                 recvAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مبيعات آجلة"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مبيعات آجلة"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                 }
                 salesAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مبيعات آجلة"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مبيعات آجلة"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                 }
                 // Update Customer balance in Contacts
                 invoice.contactId?.let { cid ->
@@ -249,23 +251,23 @@ class AppRepository(context: Context) {
             "PURCHASE_CASH" -> {
                 // Debit Inventory, Credit Cash
                 invAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مشتريات نقدية"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مشتريات نقدية"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                 }
                 cashAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مشتريات نقدية"))
-                    accountDao.updateAccount(it.copy(balance = it.balance - invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مشتريات نقدية"))
+                    accountDao.updateAccount(it.copy(balance = it.balance - localTotal))
                 }
             }
             "PURCHASE_CREDIT" -> {
                 // Debit Inventory, Credit Payables
                 invAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مشتريات آجلة"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مشتريات آجلة"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                 }
                 payAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مشتريات آجلة"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + invoice.total)) // Liabilities increase by Credit
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مشتريات آجلة"))
+                    accountDao.updateAccount(it.copy(balance = it.balance + localTotal)) // Liabilities increase by Credit
                 }
                 // Update Supplier balance in Contacts (Credit balance increase)
                 invoice.contactId?.let { cid ->
@@ -277,13 +279,13 @@ class AppRepository(context: Context) {
             "SALE_RETURN" -> {
                 // Debit Sales, Credit Cash (or Credit Receivables)
                 salesAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مرتجع مبيعات"))
-                    accountDao.updateAccount(it.copy(balance = it.balance - invoice.total)) // Revenue decreases by Debit
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مرتجع مبيعات"))
+                    accountDao.updateAccount(it.copy(balance = it.balance - localTotal)) // Revenue decreases by Debit
                 }
                 if (invoice.paymentMethod == "آجل") {
                     recvAcc?.let {
-                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مرتجع مبيعات آجل"))
-                        accountDao.updateAccount(it.copy(balance = it.balance - invoice.total))
+                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مرتجع مبيعات آجل"))
+                        accountDao.updateAccount(it.copy(balance = it.balance - localTotal))
                     }
                     // Update Customer balance in Contacts
                     invoice.contactId?.let { cid ->
@@ -293,8 +295,8 @@ class AppRepository(context: Context) {
                     }
                 } else {
                     cashAcc?.let {
-                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مرتجع مبيعات نقدي"))
-                        accountDao.updateAccount(it.copy(balance = it.balance - invoice.total))
+                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مرتجع مبيعات نقدي"))
+                        accountDao.updateAccount(it.copy(balance = it.balance - localTotal))
                     }
                 }
                 // Reverse COGS: Debit Inventory, Credit COGS
@@ -310,13 +312,13 @@ class AppRepository(context: Context) {
             "PURCHASE_RETURN" -> {
                 // Debit Cash (or Debit Payables), Credit Inventory
                 invAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = invoice.total, description = "مرتجع مشتريات"))
-                    accountDao.updateAccount(it.copy(balance = it.balance - invoice.total)) // Assets decrease by Credit
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = localTotal, description = "مرتجع مشتريات"))
+                    accountDao.updateAccount(it.copy(balance = it.balance - localTotal)) // Assets decrease by Credit
                 }
                 if (invoice.paymentMethod == "آجل") {
                     payAcc?.let {
-                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مرتجع مشتريات آجل"))
-                        accountDao.updateAccount(it.copy(balance = it.balance - invoice.total)) // Liabilities decrease by Debit
+                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مرتجع مشتريات آجل"))
+                        accountDao.updateAccount(it.copy(balance = it.balance - localTotal)) // Liabilities decrease by Debit
                     }
                     // Update Supplier balance in Contacts (Credit balance decrease)
                     invoice.contactId?.let { cid ->
@@ -326,8 +328,8 @@ class AppRepository(context: Context) {
                     }
                 } else {
                     cashAcc?.let {
-                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = invoice.total, credit = 0.0, description = "مرتجع مشتريات نقدي"))
-                        accountDao.updateAccount(it.copy(balance = it.balance + invoice.total))
+                        journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = localTotal, credit = 0.0, description = "مرتجع مشتريات نقدي"))
+                        accountDao.updateAccount(it.copy(balance = it.balance + localTotal))
                     }
                 }
             }

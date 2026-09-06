@@ -334,7 +334,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     )
     val isAiLoading = MutableStateFlow(false)
 
-    private val sharedPrefs = application.getSharedPreferences("afaq_settings", android.content.Context.MODE_PRIVATE)
+    private val sharedPrefs = com.example.util.SecurePrefs.create(application, "afaq_settings")
     private val _geminiApiKey = MutableStateFlow(sharedPrefs.getString("gemini_api_key", "") ?: "")
     val geminiApiKey: StateFlow<String> = _geminiApiKey.asStateFlow()
 

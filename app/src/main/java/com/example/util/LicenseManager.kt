@@ -26,7 +26,7 @@ sealed class LicenseStatus {
  */
 class LicenseManager(private val context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("afaq_license_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = SecurePrefs.create(context, "afaq_license_prefs")
 
     init {
         if (!prefs.contains(KEY_INSTALL_DATE)) {

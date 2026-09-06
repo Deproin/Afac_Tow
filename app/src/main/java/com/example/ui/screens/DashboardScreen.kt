@@ -418,11 +418,19 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
     val settings by viewModel.settings.collectAsState()
     val appName = settings?.name ?: "آفاق محاسب"
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        color = Color.Transparent
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    )
+                ),
+                shape = RoundedCornerShape(28.dp)
+            )
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -436,20 +444,21 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
             ) {
                 // اسم المؤسسة واسم المدير
                 Column(
+                    modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = appName,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "مرحباً، المدير العام 👋",
                         fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -458,22 +467,22 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
 
                 // الأزرار (مقابل اسم المستخدم في أقصى اليسار)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Calculator
                     IconButton(
                         onClick = onOpenCalculator,
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.3f))
                     ) {
                         Icon(
                             imageVector = Icons.Default.Calculate,
                             contentDescription = "آلة حاسبة",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     
@@ -485,15 +494,15 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
                         IconButton(
                             onClick = { onNavigate(AppScreen.LICENSE) },
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.3f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.VpnKey,
                                 contentDescription = "الترخيص",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -502,15 +511,15 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
                     IconButton(
                         onClick = { viewModel.logout() },
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.3f))
                     ) {
                         Icon(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "تسجيل الخروج",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
@@ -518,15 +527,15 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
                     IconButton(
                         onClick = onOpenDrawer,
                         modifier = Modifier
-                            .size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "القائمة الجانبية",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }

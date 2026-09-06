@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.firstOrNull
 import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 
 class SupabaseSyncManager(private val context: Context) {
     
@@ -35,7 +38,7 @@ class SupabaseSyncManager(private val context: Context) {
 
     private val safeUrl: String
         get() {
-            val url = supabaseUrl
+            val url = supabaseUrl.takeIf { it.isNotEmpty() } ?: "https://localhost/"
             return if (url.endsWith("/")) url else "$url/"
         }
 
@@ -54,11 +57,32 @@ class SupabaseSyncManager(private val context: Context) {
 
     private val db = AppDatabase.getDatabase(context)
     private val syncDao = db.syncDao()
+    
+    init {
+        // Observe app lifecycle to manage WebSocket connection
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                // App entered foreground
+                if (isSyncEnabled.value && webSocket == null) {
+                    connectRealtime()
+                }
+            }
+            override fun onStop(owner: LifecycleOwner) {
+                // App entered background
+                disconnectRealtime()
+            }
+        })
+    }
 
     fun initialize(url: String, key: String, companyId: String) {
         if (url.isNotEmpty()) this.supabaseUrl = url
         if (key.isNotEmpty()) this.supabaseAnonKey = key
         this.companyId = companyId
+        
+        if (this.supabaseUrl.isEmpty() || this.supabaseUrl == "https://localhost/") {
+            syncStatusMessage.value = "تعذر التزامن: رابط السحابة مفقود"
+            return
+        }
         
         if (this.companyId.isNotEmpty()) {
             isSyncEnabled.value = true
@@ -110,6 +134,12 @@ class SupabaseSyncManager(private val context: Context) {
                 reconnect()
             }
         })
+    }
+    
+    fun disconnectRealtime() {
+        webSocket?.close(1000, "App in background")
+        webSocket = null
+        syncStatusMessage.value = "التزامن متوقف (خلفية) ⏸️"
     }
     
     private fun subscribeToDatabaseChanges(ws: WebSocket) {

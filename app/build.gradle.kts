@@ -184,6 +184,8 @@ dependencies {
   
   // WorkManager for background daily backups
   implementation("androidx.work:work-runtime-ktx:2.9.0")
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
+  implementation("androidx.lifecycle:lifecycle-process:2.7.0")
 
   implementation(libs.play.services.auth)
   implementation(libs.google.api.client.android)

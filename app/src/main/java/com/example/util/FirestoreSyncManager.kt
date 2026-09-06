@@ -16,7 +16,7 @@ import java.util.UUID
 
 class FirestoreSyncManager(private val context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("afaq_sync_settings", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences = SecurePrefs.create(context, "afaq_sync_settings")
 
     private fun getFirestoreInstance(): FirebaseFirestore? {
         return try {
