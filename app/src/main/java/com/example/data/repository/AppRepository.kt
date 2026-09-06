@@ -509,15 +509,101 @@ class AppRepository(context: Context) {
                     accountDao.updateAccount(account.copy(balance = account.balance + change))
                 }
             }
-            // Delete the journal entry (this will also delete the lines if properly designed, but we call deleteJournalEntry)
+            // Soft Delete the journal entry and lines
+            val ts = System.currentTimeMillis()
+            journalDao.updateLinesDeletedStatus(jEntry.id, true, ts)
+            journalDao.updateEntry(jEntry.copy(isDeleted = true, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+
+        // 4. Finally, Soft Delete Invoice and its Items
+        val ts = System.currentTimeMillis()
+        invoiceDao.updateInvoiceItemsDeletedStatus(invoice.id, true, ts)
+        invoiceDao.updateInvoice(invoice.copy(isDeleted = true, syncState = "PENDING_UPDATE", updatedAt = ts))
+        logOperation("حذف مؤقت", "invoices", "تم حذف الفاتورة رقم ${invoice.invoiceNumber} وعكس تأثيرها المحاسبي والمخزني بالكامل.")
+    }
+
+    suspend fun restoreInvoice(invoice: Invoice) = withContext(Dispatchers.IO) {
+        // 1. Re-apply Inventory (Stock)
+        val itemsList = invoiceDao.getAllItemsForInvoice(invoice.id)
+        for (invItem in itemsList) {
+            val qtyInBaseUnit = if (invItem.conversionFactor > 0) invItem.quantity * invItem.conversionFactor else invItem.quantity
+            val item = itemDao.getItemById(invItem.itemId)
+            if (item != null) {
+                val whId = invoice.warehouseId ?: 1L
+                var stock = itemStockDao.getStockForItemAndWarehouse(item.id, whId)
+                if (stock == null) {
+                    val newStock = ItemStock(itemId = item.id, warehouseId = whId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    val stockId = itemStockDao.insertItemStock(newStock)
+                    stock = newStock.copy(id = stockId)
+                }
+                val newStockQty = when (invoice.type) {
+                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> stock.quantity - qtyInBaseUnit
+                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> stock.quantity + qtyInBaseUnit
+                    else -> stock.quantity
+                }
+                itemStockDao.updateItemStock(stock.copy(quantity = newStockQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+
+                val newTotalQty = when (invoice.type) {
+                    "SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN" -> item.currentQuantity - qtyInBaseUnit
+                    "PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN" -> item.currentQuantity + qtyInBaseUnit
+                    else -> item.currentQuantity
+                }
+                itemDao.updateItem(item.copy(currentQuantity = newTotalQty, syncState = "PENDING_UPDATE"))
+            }
+        }
+
+        // 2. Re-apply Contact Balance
+        invoice.contactId?.let { cid ->
+            contactDao.getContactById(cid)?.let { contact ->
+                val balanceChange = when (invoice.type) {
+                    "SALE_CREDIT" -> invoice.total
+                    "PURCHASE_CREDIT" -> invoice.total
+                    "SALE_RETURN" -> if (invoice.paymentMethod == "آجل") -invoice.total else 0.0
+                    "PURCHASE_RETURN" -> if (invoice.paymentMethod == "آجل") -invoice.total else 0.0
+                    else -> 0.0
+                }
+                if (balanceChange != 0.0) {
+                    contactDao.updateContact(contact.copy(balance = contact.balance + balanceChange))
+                }
+            }
+        }
+
+        // 3. Re-apply Journal Entry and Account Balances
+        val jEntry = journalDao.getAnyEntryByReference(invoice.id, "INVOICE")
+        if (jEntry != null) {
+            val lines = journalDao.getAllLinesForEntry(jEntry.id)
+            for (line in lines) {
+                val account = accountDao.getAccountById(line.accountId)
+                if (account != null) {
+                    val change = when (account.type) {
+                        "ASSETS", "EXPENSES" -> line.debit - line.credit
+                        "LIABILITIES", "EQUITY", "REVENUE" -> line.credit - line.debit
+                        else -> line.debit - line.credit
+                    }
+                    accountDao.updateAccount(account.copy(balance = account.balance + change))
+                }
+            }
+            val ts = System.currentTimeMillis()
+            journalDao.updateLinesDeletedStatus(jEntry.id, false, ts)
+            journalDao.updateEntry(jEntry.copy(isDeleted = false, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+
+        // 4. Set Invoice and Items to not deleted
+        val ts = System.currentTimeMillis()
+        invoiceDao.updateInvoiceItemsDeletedStatus(invoice.id, false, ts)
+        invoiceDao.updateInvoice(invoice.copy(isDeleted = false, syncState = "PENDING_UPDATE", updatedAt = ts))
+        logOperation("استعادة", "invoices", "تم استعادة الفاتورة رقم ${invoice.invoiceNumber} وإعادة تأثيرها المحاسبي والمخزني.")
+    }
+
+    suspend fun permanentDeleteInvoice(invoice: Invoice) = withContext(Dispatchers.IO) {
+        val jEntry = journalDao.getAnyEntryByReference(invoice.id, "INVOICE")
+        if (jEntry != null) {
             journalDao.deleteLinesForEntry(jEntry.id)
             journalDao.deleteEntry(jEntry)
         }
-
-        // 4. Finally, Delete Invoice and its Items
         invoiceDao.deleteInvoiceItems(invoice.id)
         invoiceDao.deleteInvoice(invoice)
-        logOperation("حذف", "invoices", "تم حذف الفاتورة رقم ${invoice.invoiceNumber} وعكس تأثيرها المحاسبي والمخزني بالكامل.")
+        logOperation("حذف نهائي", "invoices", "تم حذف الفاتورة رقم ${invoice.invoiceNumber} بشكل نهائي.")
     }
 
     suspend fun updateInvoice(oldInvoice: Invoice, newInvoice: Invoice, newItemsList: List<InvoiceItem>, accountId: Long? = null) = withContext(Dispatchers.IO) {
@@ -787,16 +873,90 @@ class AppRepository(context: Context) {
     }
 
     suspend fun deleteJournalEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
-        journalDao.deleteLinesForEntry(entry.id)
-        journalDao.deleteEntry(entry)
-        logOperation("حذف", "journal_entries", "تم حذف القيد رقم ${entry.id}")
+        db.withTransaction {
+            val lines = journalDao.getAllLinesForEntry(entry.id)
+            for (line in lines) {
+                val account = accountDao.getAccountById(line.accountId)
+                account?.let { acc ->
+                    val change = when (acc.type) {
+                        "ASSETS", "EXPENSES" -> line.credit - line.debit
+                        "LIABILITIES", "EQUITY", "REVENUE" -> line.debit - line.credit
+                        else -> line.credit - line.debit
+                    }
+                    accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                }
+            }
+            val ts = System.currentTimeMillis()
+            journalDao.updateLinesDeletedStatus(entry.id, true, ts)
+            journalDao.updateEntry(entry.copy(isDeleted = true, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+        logOperation("حذف مؤقت", "journal_entries", "تم حذف القيد رقم ${entry.id}")
     }
 
-    suspend fun updateJournalEntry(entry: JournalEntry, lines: List<JournalEntryLine>) = withContext(Dispatchers.IO) {
-        journalDao.updateEntry(entry)
-        journalDao.deleteLinesForEntry(entry.id)
-        lines.forEach { line ->
-            journalDao.insertEntryLine(line.copy(journalEntryId = entry.id))
+    suspend fun restoreJournalEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val lines = journalDao.getAllLinesForEntry(entry.id)
+            for (line in lines) {
+                val account = accountDao.getAccountById(line.accountId)
+                account?.let { acc ->
+                    val change = when (acc.type) {
+                        "ASSETS", "EXPENSES" -> line.debit - line.credit
+                        "LIABILITIES", "EQUITY", "REVENUE" -> line.credit - line.debit
+                        else -> line.debit - line.credit
+                    }
+                    accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                }
+            }
+            val ts = System.currentTimeMillis()
+            journalDao.updateLinesDeletedStatus(entry.id, false, ts)
+            journalDao.updateEntry(entry.copy(isDeleted = false, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+        logOperation("استعادة", "journal_entries", "تم استعادة القيد رقم ${entry.id}")
+    }
+
+    suspend fun permanentDeleteJournalEntry(entry: JournalEntry) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            journalDao.deleteLinesForEntry(entry.id)
+            journalDao.deleteEntry(entry)
+        }
+        logOperation("حذف نهائي", "journal_entries", "تم حذف القيد رقم ${entry.id} بشكل نهائي")
+    }
+
+    suspend fun updateJournalEntry(entry: JournalEntry, newLines: List<JournalEntryLine>) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            // Reverse old balances
+            val oldLines = journalDao.getAllLinesForEntry(entry.id)
+            for (line in oldLines) {
+                val account = accountDao.getAccountById(line.accountId)
+                account?.let { acc ->
+                    val change = when (acc.type) {
+                        "ASSETS", "EXPENSES" -> line.credit - line.debit
+                        "LIABILITIES", "EQUITY", "REVENUE" -> line.debit - line.credit
+                        else -> line.credit - line.debit
+                    }
+                    accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                }
+            }
+            
+            // Delete old lines
+            journalDao.deleteLinesForEntry(entry.id)
+            
+            // Insert new lines and apply balances
+            newLines.forEach { line ->
+                val lineWithId = line.copy(journalEntryId = entry.id)
+                journalDao.insertEntryLine(lineWithId)
+                
+                val account = accountDao.getAccountById(line.accountId)
+                account?.let { acc ->
+                    val change = when (acc.type) {
+                        "ASSETS", "EXPENSES" -> line.debit - line.credit
+                        "LIABILITIES", "EQUITY", "REVENUE" -> line.credit - line.debit
+                        else -> line.debit - line.credit
+                    }
+                    accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                }
+            }
+            journalDao.updateEntry(entry.copy(syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
         }
         logOperation("تعديل", "journal_entries", "تم تعديل القيد رقم ${entry.entryNumber}")
     }
@@ -858,9 +1018,11 @@ class AppRepository(context: Context) {
                         }
                         accountDao.updateAccount(acc.copy(balance = acc.balance + change))
                     }
-                    journalDao.deleteEntryLine(line)
+                    val ts = System.currentTimeMillis()
+                    journalDao.updateLinesDeletedStatus(journalEntry.id, true, ts)
                 }
-                journalDao.deleteEntry(journalEntry)
+                val ts = System.currentTimeMillis()
+                journalDao.updateEntry(journalEntry.copy(isDeleted = true, syncState = "PENDING_UPDATE", updatedAt = ts))
             }
             
             if (tx.referenceType == "CONTACT" && tx.referenceId != null) {
@@ -870,9 +1032,56 @@ class AppRepository(context: Context) {
                 }
             }
 
+            val ts = System.currentTimeMillis()
+            cashTransactionDao.updateCashTransaction(tx.copy(isDeleted = true, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+        logOperation("حذف مؤقت", "cash_transactions", "تم حذف السند رقم ${tx.id}")
+    }
+
+    suspend fun restoreCashTransaction(tx: CashTransaction) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val journalEntry = journalDao.getAnyEntryByReference(tx.id, "CASH_TX")
+            if (journalEntry != null) {
+                val lines = journalDao.getAllLinesForEntry(journalEntry.id)
+                for (line in lines) {
+                    val account = accountDao.getAccountById(line.accountId)
+                    account?.let { acc ->
+                        val change = when (acc.type) {
+                            "ASSETS", "EXPENSES" -> line.debit - line.credit
+                            "LIABILITIES", "EQUITY", "REVENUE" -> line.credit - line.debit
+                            else -> line.debit - line.credit
+                        }
+                        accountDao.updateAccount(acc.copy(balance = acc.balance + change))
+                    }
+                }
+                val ts = System.currentTimeMillis()
+                journalDao.updateLinesDeletedStatus(journalEntry.id, false, ts)
+                journalDao.updateEntry(journalEntry.copy(isDeleted = false, syncState = "PENDING_UPDATE", updatedAt = ts))
+            }
+            
+            if (tx.referenceType == "CONTACT" && tx.referenceId != null) {
+                val localAmount = tx.amount * tx.exchangeRate
+                contactDao.getContactById(tx.referenceId)?.let { contact ->
+                    contactDao.updateContact(contact.copy(balance = contact.balance - localAmount)) // Receipt and Payment both subtracted originally
+                }
+            }
+
+            val ts = System.currentTimeMillis()
+            cashTransactionDao.updateCashTransaction(tx.copy(isDeleted = false, syncState = "PENDING_UPDATE", updatedAt = ts))
+        }
+        logOperation("استعادة", "cash_transactions", "تم استعادة السند رقم ${tx.id}")
+    }
+
+    suspend fun permanentDeleteCashTransaction(tx: CashTransaction) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val journalEntry = journalDao.getAnyEntryByReference(tx.id, "CASH_TX")
+            if (journalEntry != null) {
+                journalDao.deleteLinesForEntry(journalEntry.id)
+                journalDao.deleteEntry(journalEntry)
+            }
             cashTransactionDao.deleteCashTransaction(tx)
         }
-        logOperation("حذف", "cash_transactions", "تم حذف السند رقم ${tx.id}")
+        logOperation("حذف نهائي", "cash_transactions", "تم حذف السند رقم ${tx.id} بشكل نهائي")
     }
 
     suspend fun createRemittance(rem: Remittance) = withContext(Dispatchers.IO) {

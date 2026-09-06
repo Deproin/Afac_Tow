@@ -41,7 +41,8 @@ enum class AppScreen {
     AI_ASSISTANT,
     LICENSE,
     OPERATIONS,
-    PARTNERS
+    PARTNERS,
+    RECYCLE_BIN
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -228,13 +229,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val invoices = repository.invoiceDao.getAllInvoices()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val deletedInvoices = repository.invoiceDao.getDeletedInvoices()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val accounts = repository.accountDao.getAllAccounts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val journalEntries = repository.journalDao.getAllEntries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val deletedJournalEntries = repository.journalDao.getDeletedEntries()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val cashTransactions = repository.cashTransactionDao.getAllCashTransactions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val deletedCashTransactions = repository.cashTransactionDao.getDeletedCashTransactions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val bankTransactions = repository.bankTransactionDao.getAllBankTransactions()
@@ -542,11 +552,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteInvoice(invoice: Invoice, onComplete: () -> Unit = {}) = viewModelScope.launch {
         repository.deleteInvoice(invoice)
         try {
+            // Note: Since we soft delete locally, we might want to soft delete in cloud too, 
+            // but for now we just delete it from cloud to match old behavior or let sync handle it.
             supabaseSyncManager.deleteInvoiceCloud(invoice.syncId)
         } catch (e: Exception) {
             e.printStackTrace()
         }
         onComplete()
+    }
+
+    fun restoreInvoice(invoice: Invoice) = viewModelScope.launch {
+        repository.restoreInvoice(invoice)
+    }
+
+    fun permanentDeleteInvoice(invoice: Invoice) = viewModelScope.launch {
+        repository.permanentDeleteInvoice(invoice)
     }
 
     fun updateInvoice(oldInvoice: Invoice, newInvoice: Invoice, newItemsList: List<InvoiceItem>, accountId: Long? = null, onComplete: () -> Unit = {}) = viewModelScope.launch {
@@ -565,6 +585,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onComplete()
     }
 
+    fun restoreJournalEntry(entry: JournalEntry) = viewModelScope.launch {
+        repository.restoreJournalEntry(entry)
+    }
+
+    fun permanentDeleteJournalEntry(entry: JournalEntry) = viewModelScope.launch {
+        repository.permanentDeleteJournalEntry(entry)
+    }
+
     fun updateJournalEntry(entry: JournalEntry, lines: List<JournalEntryLine>, onComplete: () -> Unit = {}) = viewModelScope.launch {
         repository.updateJournalEntry(entry, lines)
         onComplete()
@@ -576,6 +604,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteCashTransaction(tx: CashTransaction) = viewModelScope.launch {
         repository.deleteCashTransaction(tx)
+    }
+    
+    fun restoreCashTransaction(tx: CashTransaction) = viewModelScope.launch {
+        repository.restoreCashTransaction(tx)
+    }
+
+    fun permanentDeleteCashTransaction(tx: CashTransaction) = viewModelScope.launch {
+        repository.permanentDeleteCashTransaction(tx)
     }
 
 

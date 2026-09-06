@@ -192,6 +192,9 @@ interface InvoiceDao {
     @Query("SELECT * FROM invoices WHERE isDeleted = 0 ORDER BY timestamp DESC")
     fun getAllInvoices(): Flow<List<Invoice>>
 
+    @Query("SELECT * FROM invoices WHERE isDeleted = 1 ORDER BY timestamp DESC")
+    fun getDeletedInvoices(): Flow<List<Invoice>>
+
     @Query("SELECT * FROM invoices WHERE type IN (:types) AND isDeleted = 0 ORDER BY timestamp DESC")
     fun getInvoicesByTypes(types: List<String>): Flow<List<Invoice>>
 
@@ -210,11 +213,17 @@ interface InvoiceDao {
     @Query("SELECT * FROM invoice_items WHERE invoiceId = :invoiceId AND isDeleted = 0")
     suspend fun getItemsForInvoice(invoiceId: Long): List<InvoiceItem>
 
+    @Query("SELECT * FROM invoice_items WHERE invoiceId = :invoiceId")
+    suspend fun getAllItemsForInvoice(invoiceId: Long): List<InvoiceItem>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertInvoiceItem(item: InvoiceItem): Long
 
     @Query("DELETE FROM invoice_items WHERE invoiceId = :invoiceId")
     suspend fun deleteInvoiceItems(invoiceId: Long)
+
+    @Query("UPDATE invoice_items SET isDeleted = :isDeleted, syncState = 'PENDING_UPDATE', updatedAt = :updatedAt WHERE invoiceId = :invoiceId")
+    suspend fun updateInvoiceItemsDeletedStatus(invoiceId: Long, isDeleted: Boolean, updatedAt: Long)
 
     @Query("SELECT SUM(total) FROM invoices WHERE type IN (:types) AND isDeleted = 0")
     suspend fun sumInvoicesByTypes(types: List<String>): Double?
@@ -264,11 +273,20 @@ interface JournalDao {
     @Query("SELECT * FROM journal_entries WHERE isDeleted = 0 ORDER BY timestamp DESC")
     fun getAllEntries(): Flow<List<JournalEntry>>
 
+    @Query("SELECT * FROM journal_entries WHERE isDeleted = 1 ORDER BY timestamp DESC")
+    fun getDeletedEntries(): Flow<List<JournalEntry>>
+
     @Query("SELECT * FROM journal_entries WHERE referenceId = :refId AND referenceType = :refType AND isDeleted = 0 LIMIT 1")
     suspend fun getEntryByReference(refId: Long, refType: String): JournalEntry?
 
+    @Query("SELECT * FROM journal_entries WHERE referenceId = :refId AND referenceType = :refType LIMIT 1")
+    suspend fun getAnyEntryByReference(refId: Long, refType: String): JournalEntry?
+
     @Query("SELECT * FROM journal_entry_lines WHERE journalEntryId = :entryId AND isDeleted = 0")
     suspend fun getLinesForEntry(entryId: Long): List<JournalEntryLine>
+
+    @Query("SELECT * FROM journal_entry_lines WHERE journalEntryId = :entryId")
+    suspend fun getAllLinesForEntry(entryId: Long): List<JournalEntryLine>
 
     @Query("SELECT * FROM journal_entry_lines WHERE accountId = :accId AND isDeleted = 0")
     suspend fun getLinesForAccount(accId: Long): List<JournalEntryLine>
@@ -301,6 +319,9 @@ interface JournalDao {
     @Query("DELETE FROM journal_entry_lines WHERE journalEntryId = :entryId")
     suspend fun deleteLinesForEntry(entryId: Long)
 
+    @Query("UPDATE journal_entry_lines SET isDeleted = :isDeleted, syncState = 'PENDING_UPDATE', updatedAt = :updatedAt WHERE journalEntryId = :entryId")
+    suspend fun updateLinesDeletedStatus(entryId: Long, isDeleted: Boolean, updatedAt: Long)
+
     @Update
     suspend fun updateEntry(entry: JournalEntry)
 
@@ -327,6 +348,9 @@ interface JournalDao {
 interface CashTransactionDao {
     @Query("SELECT * FROM cash_transactions WHERE isDeleted = 0 ORDER BY timestamp DESC")
     fun getAllCashTransactions(): Flow<List<CashTransaction>>
+
+    @Query("SELECT * FROM cash_transactions WHERE isDeleted = 1 ORDER BY timestamp DESC")
+    fun getDeletedCashTransactions(): Flow<List<CashTransaction>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCashTransaction(transaction: CashTransaction): Long

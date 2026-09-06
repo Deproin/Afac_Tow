@@ -58,6 +58,11 @@ class MainActivity : ComponentActivity() {
                                 onBack = { appViewModel.navigateTo(AppScreen.DASHBOARD) }
                             )
                             
+                            AppScreen.RECYCLE_BIN -> com.example.ui.screens.RecycleBinScreen(
+                                viewModel = appViewModel,
+                                onBack = { appViewModel.navigateTo(AppScreen.DASHBOARD) }
+                            )
+                            
                             AppScreen.CONTACTS -> ContactsScreen(
                                 viewModel = appViewModel,
                                 onBack = { appViewModel.navigateTo(AppScreen.DASHBOARD) }

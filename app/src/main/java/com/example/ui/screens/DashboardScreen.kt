@@ -377,6 +377,7 @@ fun AppDrawerContent(
                 QuickAction("الصندوق والبنك", Icons.Default.AccountBalanceWallet, AppScreen.TREASURY, null, Color(0xFF00796B)),
                 QuickAction("دليل الحسابات", Icons.Default.AccountTree, AppScreen.JOURNAL_ENTRIES, null, Color(0xFFEF6C00)),
                 QuickAction("التقارير الشاملة", Icons.Default.Assessment, AppScreen.REPORTS, null, Color(0xFF455A64)),
+                QuickAction("سلة المحذوفات", Icons.Default.DeleteSweep, AppScreen.RECYCLE_BIN, null, Color(0xFFF44336)),
                 QuickAction("إعدادات المؤسسة", Icons.Default.Settings, AppScreen.SETTINGS, null, Color(0xFF00897B)),
                 QuickAction("إدارة المستخدمين", Icons.Default.ManageAccounts, AppScreen.USER_MANAGEMENT, null, Color(0xFFD81B60)),
                 QuickAction("المساعد الذكي", Icons.Default.SmartToy, AppScreen.AI_ASSISTANT, null, Color(0xFF3F51B5))
