@@ -374,7 +374,7 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
     val appName = settings?.name ?: "آفاق محاسب"
     val currentUserState by viewModel.currentUser.collectAsState()
     val isAdminUser = currentUserState?.username.equals("admin", ignoreCase = true) || currentUserState?.permSettings == true
-    val userName = currentUserState?.fullName?.takeIf { it.isNotBlank() } ?: "المدير العام"
+    val userName = currentUserState?.username?.takeIf { it.isNotBlank() } ?: "المدير العام"
 
     Box(
         modifier = Modifier
