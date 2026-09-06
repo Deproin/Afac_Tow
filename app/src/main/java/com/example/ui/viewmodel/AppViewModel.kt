@@ -1216,5 +1216,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             onComplete()
         }
     }
+
+    private val _availableProfitToDistribute = MutableStateFlow(0.0)
+    val availableProfitToDistribute: StateFlow<Double> = _availableProfitToDistribute.asStateFlow()
+
+    fun calculateAvailableProfit() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val rawSales = repository.invoiceDao.sumInvoicesByTypes(listOf("SALE_CASH", "SALE_CREDIT")) ?: 0.0
+            val rawSalesReturn = repository.invoiceDao.sumInvoicesByTypes(listOf("SALE_RETURN")) ?: 0.0
+            val totalSales = rawSales - rawSalesReturn
+
+            val rawPurchases = repository.invoiceDao.sumInvoicesByTypes(listOf("PURCHASE_CASH", "PURCHASE_CREDIT")) ?: 0.0
+            val rawPurchasesReturn = repository.invoiceDao.sumInvoicesByTypes(listOf("PURCHASE_RETURN")) ?: 0.0
+            val totalPurchases = rawPurchases - rawPurchasesReturn
+
+            val totalExpenses = repository.cashTransactionDao.sumCashTransactionsByType("PAYMENT") ?: 0.0
+            
+            val netProfit = totalSales - totalPurchases - totalExpenses
+            
+            val distributed = repository.getAlreadyDistributedProfits()
+            _availableProfitToDistribute.value = (netProfit - distributed).coerceAtLeast(0.0)
+        }
+    }
+
+    fun distributeProfits(amount: Double, notes: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            repository.distributeProfits(amount, notes)
+            calculateAvailableProfit()
+            onComplete()
+        }
+    }
 }
 

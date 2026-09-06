@@ -284,6 +284,14 @@ interface JournalDao {
     """)
     fun getAccountBalancesByCurrencyFlow(currencyCode: String): Flow<List<AccountCurrencyBalance>>
 
+    @Query("""
+        SELECT SUM(l.debit) 
+        FROM journal_entry_lines l 
+        JOIN journal_entries e ON l.journalEntryId = e.id 
+        WHERE e.referenceType = 'PROFIT_DISTRIBUTION' AND e.isDeleted = 0 AND l.isDeleted = 0
+    """)
+    suspend fun getTotalDistributedProfits(): Double?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEntry(entry: JournalEntry): Long
 

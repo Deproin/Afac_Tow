@@ -1097,6 +1097,75 @@ class AppRepository(context: Context) {
             }
         }
     }
+
+    suspend fun getAlreadyDistributedProfits(): Double = withContext(Dispatchers.IO) {
+        return@withContext journalDao.getTotalDistributedProfits() ?: 0.0
+    }
+
+    suspend fun distributeProfits(amount: Double, notes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val partners = partnerDao.getAllPartnersList()
+            if (partners.isEmpty()) return@withTransaction
+
+            // Get or create "الأرباح المبقاة" (Retained Earnings) account
+            var retainedEarningsAcc = accountDao.getAccountByCode("33") // Assuming 33 is Retained Earnings code
+            if (retainedEarningsAcc == null) {
+                val equityAcc = accountDao.getAccountByCode("3")
+                if (equityAcc != null) {
+                    val newAcc = Account(
+                        code = "33",
+                        name = "الأرباح المبقاة وتوزيعات الأرباح",
+                        type = "EQUITY",
+                        parentId = equityAcc.id
+                    )
+                    accountDao.insertAccount(newAcc)
+                    retainedEarningsAcc = accountDao.getAccountByCode("33")
+                }
+            }
+
+            if (retainedEarningsAcc == null) return@withTransaction
+
+            // Create Journal Entry
+            val entryNumber = "PROF-" + System.currentTimeMillis().toString().takeLast(6)
+            val entry = JournalEntry(
+                entryNumber = entryNumber,
+                description = notes.ifEmpty { "توزيع أرباح على الشركاء" },
+                referenceType = "PROFIT_DISTRIBUTION",
+                referenceId = System.currentTimeMillis()
+            )
+            val entryId = journalDao.insertEntry(entry)
+
+            // Debit Retained Earnings
+            journalDao.insertEntryLine(
+                JournalEntryLine(
+                    journalEntryId = entryId,
+                    accountId = retainedEarningsAcc.id,
+                    debit = amount,
+                    credit = 0.0,
+                    description = "إقفال الأرباح الموزعة"
+                )
+            )
+
+            // Credit each partner's current account
+            var totalPercentage = partners.sumOf { it.percentage }
+            if (totalPercentage <= 0.0) totalPercentage = 100.0 // prevent division by zero
+
+            for (partner in partners) {
+                if (partner.currentAccountId != null) {
+                    val partnerShare = (partner.percentage / totalPercentage) * amount
+                    journalDao.insertEntryLine(
+                        JournalEntryLine(
+                            journalEntryId = entryId,
+                            accountId = partner.currentAccountId,
+                            debit = 0.0,
+                            credit = partnerShare,
+                            description = "توزيع أرباح: ${partner.name} (${String.format("%.1f", partner.percentage)}%)"
+                        )
+                    )
+                }
+            }
+        }
+    }
 }
 
 

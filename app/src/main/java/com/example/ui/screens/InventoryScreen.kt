@@ -64,11 +64,28 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
     // Handle pendingDialogToOpen from Dashboard Quick Operations
     LaunchedEffect(viewModel.pendingDialogToOpen) {
-        if (viewModel.pendingDialogToOpen == "NEW_ITEM") {
+        val pending = viewModel.pendingDialogToOpen
+        if (pending != null) {
+            when (pending) {
+                "NEW_ITEM" -> {
+                    selectedTab = 0
+                    tempUnits.clear()
+                    showAddItemDialog = true
+                }
+                "STOCK_SUPPLY" -> {
+                    selectedTab = 2
+                    showStockSupplyDialog = true
+                }
+                "STOCK_TRANSFER" -> {
+                    selectedTab = 2
+                    showStockTransferDialog = true
+                }
+                "STOCK_ISSUE" -> {
+                    selectedTab = 2
+                    showStockIssueDialog = true
+                }
+            }
             viewModel.pendingDialogToOpen = null
-            selectedTab = 0
-            tempUnits.clear()
-            showAddItemDialog = true
         }
     }
 
@@ -294,6 +311,19 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                 Text("توريد مخزني +", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
 
+                            Button(
+                                onClick = {
+                                    showStockIssueDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("صرف مخزني -", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+
                             OutlinedButton(
                                 onClick = { viewModel.exportItemsToCsv(context) },
                                 modifier = Modifier.weight(1f),
@@ -377,12 +407,43 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Text("العمليات والسندات المخزنية", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                        
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("المستودعات والمخازن المسجلة (${warehouses.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Button(
+                                onClick = {
+                                    supplyTargetItem = items.firstOrNull()
+                                    supplyWarehouse = warehouses.firstOrNull()
+                                    supplyQtyInput = "10.0"
+                                    supplyCostInput = ""
+                                    supplyNotesInput = ""
+                                    showStockSupplyDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("سند توريد", fontSize = 11.sp, color = Color.White)
+                            }
+                            
+                            Button(
+                                onClick = {
+                                    showStockIssueDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("سند صرف", fontSize = 11.sp, color = Color.White)
+                            }
 
                             Button(
                                 onClick = {
@@ -393,15 +454,28 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                         transferQtyInput = "1.0"
                                         transferNotesInput = ""
                                         showStockTransferDialog = true
+                                    } else {
+                                        Toast.makeText(context, "يجب إضافة مستودعين على الأقل للتحويل", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                enabled = warehouses.size >= 2 && items.isNotEmpty(),
+                                modifier = Modifier.weight(1.2f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0277BD)),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Icon(Icons.Default.CompareArrows, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("تحويل مخزني بين الفروع", fontSize = 11.sp, color = Color.White)
+                                Text("سند تحويل", fontSize = 11.sp, color = Color.White)
                             }
+                        }
+
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("المستودعات والمخازن المسجلة (${warehouses.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
 
                         if (warehouses.isEmpty()) {

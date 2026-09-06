@@ -29,7 +29,15 @@ fun PartnersScreen(
     onNavigate: (AppScreen) -> Unit
 ) {
     val partners by viewModel.partners.collectAsState()
+    val availableProfit by viewModel.availableProfitToDistribute.collectAsState()
+    
     var showAddDialog by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("الشركاء والحصص", "توزيع الأرباح وإقفال الفترة")
+
+    LaunchedEffect(Unit) {
+        viewModel.calculateAvailableProfit()
+    }
 
     Scaffold(
         topBar = {
@@ -59,16 +67,44 @@ fun PartnersScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            if (partners.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("لا يوجد شركاء مسجلين", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp)
+            TabRow(selectedTabIndex = selectedTab) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(title, fontWeight = FontWeight.Bold) }
+                    )
                 }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(partners) { partner ->
-                        PartnerItem(partner = partner)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (selectedTab == 0) {
+                if (partners.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("لا يوجد شركاء مسجلين", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp)
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(partners) { partner ->
+                            PartnerItem(partner = partner)
+                        }
                     }
                 }
+            } else {
+                ProfitDistributionTab(
+                    availableProfit = availableProfit,
+                    partners = partners,
+                    onDistribute = { amount, notes ->
+                        viewModel.distributeProfits(amount, notes) {
+                            android.widget.Toast.makeText(
+                                androidx.compose.ui.platform.LocalContext.current,
+                                "تم توزيع الأرباح بنجاح وتم توليد القيود المحاسبية",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                )
             }
         }
 
@@ -218,4 +254,94 @@ fun AddPartnerDialog(
         shape = RoundedCornerShape(16.dp),
         containerColor = Color.White
     )
+}
+
+@Composable
+fun ProfitDistributionTab(
+    availableProfit: Double,
+    partners: List<Partner>,
+    onDistribute: (Double, String) -> Unit
+) {
+    var distributeAmount by remember { mutableStateOf(availableProfit.toString()) }
+    var notes by remember { mutableStateOf("توزيع أرباح نهاية الفترة للشركاء") }
+    
+    val totalPercentage = partners.sumOf { it.percentage }.takeIf { it > 0 } ?: 100.0
+    val amountToDistribute = distributeAmount.toDoubleOrNull() ?: 0.0
+
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("إجمالي الأرباح المتاحة للتوزيع", fontSize = 14.sp, color = Color(0xFF2E7D32))
+                Text(
+                    "${String.format("%.2f", availableProfit)} ر.ي",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                    color = Color(0xFF2E7D32)
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = distributeAmount,
+            onValueChange = { distributeAmount = it },
+            label = { Text("المبلغ المراد توزيعه الآن") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+        )
+
+        OutlinedTextField(
+            value = notes,
+            onValueChange = { notes = it },
+            label = { Text("البيان والملاحظات") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Text("المحاكاة: حصة كل شريك من هذا المبلغ", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(partners) { partner ->
+                val share = (partner.percentage / totalPercentage) * amountToDistribute
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(partner.name, fontWeight = FontWeight.Bold)
+                        Text(
+                            "+ ${String.format("%.2f", share)} ر.ي",
+                            color = Color(0xFF2E7D32),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Button(
+            onClick = {
+                if (amountToDistribute > 0 && partners.isNotEmpty()) {
+                    onDistribute(amountToDistribute, notes)
+                    distributeAmount = "0.0"
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(12.dp),
+            enabled = amountToDistribute > 0 && partners.isNotEmpty()
+        ) {
+            Text("اعتماد التوزيع وتوليد قيود الإقفال", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
 }

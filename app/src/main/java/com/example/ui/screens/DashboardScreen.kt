@@ -219,78 +219,41 @@ fun DashboardScreen(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit) {
 
 
 
-            // Key Metrics (Immersive Layer)
-            val todaySales by viewModel.todayNetSales.collectAsState()
-            val salesGrowth by viewModel.todaySalesGrowth.collectAsState()
-
-            ImmersiveKeyMetricsCard(
-                todaySales = todaySales,
-                salesGrowth = salesGrowth,
-                netProfit = netProfit,
-                boxBalance = boxBalance,
-                viewModel = viewModel
-            )
-
-            // Quick Operations Bar (فوق التنبيهات)
-            QuickOperationsBar(
-                onNavigate = onNavigate,
-                onCustomAction = { action ->
-                    when (action) {
-                        "REMITTANCE" -> showRemittanceDialog = true
-                        "EXCHANGE" -> showExchangeDialog = true
-                        "RECEIPT" -> viewModel.navigateWithDialog(com.example.ui.viewmodel.AppScreen.TREASURY, "RECEIPT", onNavigate)
-                        "PAYMENT" -> viewModel.navigateWithDialog(com.example.ui.viewmodel.AppScreen.TREASURY, "PAYMENT", onNavigate)
-                        "JOURNAL" -> viewModel.navigateWithDialog(com.example.ui.viewmodel.AppScreen.JOURNAL_ENTRIES, "JOURNAL", onNavigate)
-                        "NEW_ITEM" -> viewModel.navigateWithDialog(com.example.ui.viewmodel.AppScreen.INVENTORY, "NEW_ITEM", onNavigate)
-                    }
-                }
-            )
-
-            val expiringSoonItems by viewModel.expiringSoonItems.collectAsState()
-
-            // Dynamic Alerts Drawer
-            AlertsSection(
-                lowStock = lowStockItems,
-                overCreditContacts = contacts.filter { it.type == "CUSTOMER" && it.balance > it.creditLimit },
-                expiringSoon = expiringSoonItems
-            )
-
-            // Financial Summary Grid
-            Text("الملخص المالي السريع", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            FinancialGrid(
-                sales = totalSales,
-                purchases = totalPurchases,
-                profit = netProfit,
-                expenses = totalExpenses,
-                dailyExpenses = dailyExpenses,
-                box = boxBalance,
-                bank = bankBalance,
-                stockValue = inventoryValue ?: 0.0,
-                itemsCount = itemsCount,
-                clients = clientsCount,
-                suppliers = suppliersCount
-            )
-
-            // Custom Chart drawn via Canvas (Sales & Profits trend)
-            val weeklySales by viewModel.weeklySalesData.collectAsState()
-            val weeklyProfits by viewModel.weeklyProfitsData.collectAsState()
-            
-            Text("مؤشر حركة المبيعات والأرباح (آخر 7 أيام)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            BusinessPerformanceChart(salesData = weeklySales, profitsData = weeklyProfits)
-
-            // Dialogs states are now hoisted above ModalNavigationDrawer
-
             // Quick Actions Panel
-            Text("الوصول السريع", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-            QuickActionsGrid(
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    "الوصول السريع والعمليات",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            QuickActionsList(
+                viewModel = viewModel,
                 onNavigate = onNavigate,
                 onCustomAction = onCustomAction
             )
-
-            // AI Insight Card (Direct from design HTML)
-            DashboardAiCard(onNavigate)
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
         
         // Render dialogs inside the main screen composable but outside the scrollable Column
@@ -1215,106 +1178,90 @@ fun BusinessPerformanceChart(salesData: List<Float>, profitsData: List<Float>) {
 }
 
 @Composable
-fun QuickActionsGrid(onNavigate: (AppScreen) -> Unit, onCustomAction: (String) -> Unit = {}) {
+fun QuickActionsList(
+    viewModel: AppViewModel,
+    onNavigate: (AppScreen) -> Unit,
+    onCustomAction: (String) -> Unit
+) {
     val actions = listOf(
+        QuickAction("فاتورة مبيعات", Icons.Default.PointOfSale, AppScreen.SALES, null, Color(0xFF0061A4)),
+        QuickAction("فاتورة مشتريات", Icons.Default.ShoppingCart, AppScreen.PURCHASES, null, Color(0xFFC62828)),
+        QuickAction("سند قبض (استلام نقدية)", Icons.Default.AddCard, null, "RECEIPT", Color(0xFF1B5E20)),
+        QuickAction("سند صرف (دفع نقدية)", Icons.Default.MoneyOff, null, "PAYMENT", Color(0xFFB71C1C)),
+        QuickAction("سند توريد مخزني", Icons.Default.Inventory, null, "STOCK_SUPPLY", Color(0xFF7B1FA2)),
+        QuickAction("سند تحويل مخزني", Icons.Default.LocalShipping, null, "STOCK_TRANSFER", Color(0xFF0288D1)),
+        QuickAction("سند صرف مخزني", Icons.Default.Output, null, "STOCK_ISSUE", Color(0xFFE65100)),
         QuickAction("سجل وإدارة العمليات", Icons.Default.HistoryEdu, AppScreen.OPERATIONS, null, Color(0xFF1E88E5)),
-        QuickAction("حوالة جديدة", Icons.Default.Send, null, "REMITTANCE", Color(0xFF0288D1)),
+        QuickAction("حوالة مالية", Icons.Default.Send, null, "REMITTANCE", Color(0xFF0288D1)),
         QuickAction("صرف عملات", Icons.Default.CurrencyExchange, null, "EXCHANGE", Color(0xFF2E7D32)),
-        QuickAction("فواتير المبيعات", Icons.Default.ReceiptLong, AppScreen.SALES, null, Color(0xFF0061A4)),
-        QuickAction("فواتير المشتريات", Icons.Default.LocalShipping, AppScreen.PURCHASES, null, Color(0xFFC62828)),
-        QuickAction("مرتجع المبيعات", Icons.Default.AssignmentReturn, AppScreen.SALES_RETURN, null, Color(0xFFF57C00)),
-        QuickAction("مرتجع المشتريات", Icons.Default.KeyboardReturn, AppScreen.PURCHASES_RETURN, null, Color(0xFFE53935)),
-        QuickAction("الأصناف والمخازن", Icons.Default.Inventory, AppScreen.INVENTORY, null, Color(0xFF7B1FA2)),
+        QuickAction("الأصناف والمخازن", Icons.Default.Category, AppScreen.INVENTORY, null, Color(0xFF7B1FA2)),
         QuickAction("العملاء والموردين", Icons.Default.ContactPage, AppScreen.CONTACTS, null, Color(0xFF0288D1)),
         QuickAction("الصندوق والبنك", Icons.Default.AccountBalanceWallet, AppScreen.TREASURY, null, Color(0xFF00796B)),
-        QuickAction("دليل الحسابات", Icons.Default.AccountTree, AppScreen.JOURNAL_ENTRIES, null, Color(0xFFEF6C00)),
+        QuickAction("دليل الحسابات وقيود اليومية", Icons.Default.AccountTree, AppScreen.JOURNAL_ENTRIES, null, Color(0xFFEF6C00)),
         QuickAction("التقارير الشاملة", Icons.Default.Assessment, AppScreen.REPORTS, null, Color(0xFF455A64)),
-        QuickAction("إعدادات المؤسسة", Icons.Default.Settings, AppScreen.SETTINGS, null, Color(0xFF00897B)),
-        QuickAction("مساعد آفاق الذكي", Icons.Default.SmartToy, AppScreen.AI_ASSISTANT, null, Color(0xFF3F51B5)),
-        QuickAction("إدارة المستخدمين", Icons.Default.ManageAccounts, AppScreen.USER_MANAGEMENT, null, Color(0xFFD81B60))
-    )
-
-    val pastelColors = listOf(
-        Color(0xFFD1E4FF), // BlueContainer
-        Color(0xFFEADDFF), // PurpleContainer
-        Color(0xFFFAD8FD), // PinkContainer
-        Color(0xFFD8FDD9), // GreenContainer
-        Color(0xFFFFF2D3), // YellowContainer
-        Color(0xFFFFE2E2), // RedContainer
-        Color(0xFFE0F7FA), // CyanContainer
-        Color(0xFFEDE7F6), // DeepPurpleContainer
-        Color(0xFFF1F8E9), // LightGreenContainer
-        Color(0xFFF3F4F9)  // GreyContainer
+        QuickAction("المساعد الذكي", Icons.Default.SmartToy, AppScreen.AI_ASSISTANT, null, Color(0xFF3F51B5)),
+        QuickAction("إعدادات المؤسسة", Icons.Default.Settings, AppScreen.SETTINGS, null, Color(0xFF00897B))
     )
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        val chunked = actions.chunked(3)
-        chunked.forEachIndexed { rowIndex, row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                row.forEachIndexed { colIndex, action ->
-                    val index = rowIndex * 3 + colIndex
-                    val containerColor = pastelColors.getOrElse(index % pastelColors.size) { Color(0xFFF3F4F9) }
-                    
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(100.dp)
-                            .clickable {
-                                if (action.screen != null) {
-                                    onNavigate(action.screen)
-                                } else if (action.actionKey != null) {
-                                    onCustomAction(action.actionKey)
-                                }
-                            },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(40.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                color = containerColor
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = action.icon,
-                                        contentDescription = action.title,
-                                        tint = action.color,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = action.title,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                lineHeight = 13.sp,
-                                softWrap = true
-                            )
-
+        actions.forEach { action ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .clickable {
+                        if (action.actionKey == "RECEIPT" || action.actionKey == "PAYMENT") {
+                            viewModel.navigateWithDialog(AppScreen.TREASURY, action.actionKey, onNavigate)
+                        } else if (action.actionKey?.startsWith("STOCK_") == true) {
+                            viewModel.navigateWithDialog(AppScreen.INVENTORY, action.actionKey, onNavigate)
+                        } else if (action.screen != null) {
+                            onNavigate(action.screen)
+                        } else if (action.actionKey != null) {
+                            onCustomAction(action.actionKey)
                         }
-                    }
-                }
-                if (row.size < 3) {
-                    repeat(3 - row.size) {
-                        Spacer(modifier = Modifier.weight(1f))
+                    },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // Colored vertical strip for premium look
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(6.dp)
+                            .background(action.color)
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(action.color.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(action.icon, contentDescription = null, tint = action.color, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = action.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            Icons.Default.ArrowBackIosNew,
+                            contentDescription = null,
+                            tint = Color.Gray.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -1323,127 +1270,7 @@ fun QuickActionsGrid(onNavigate: (AppScreen) -> Unit, onCustomAction: (String) -
 }
 
 fun formatCurrency(amount: Double): String {
-    val format = NumberFormat.getCurrencyInstance(Locale("ar", "YE"))
+    val format = java.text.NumberFormat.getCurrencyInstance(java.util.Locale("ar", "YE"))
     return format.format(amount).replace("YER", "ر.ي")
 }
 
-// ─── شريط العمليات السريعة ───────────────────────────────────────────────────
-data class QuickOp(
-    val label: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val gradientStart: Color,
-    val gradientEnd: Color,
-    val screen: AppScreen? = null,
-    val actionKey: String? = null
-)
-
-@Composable
-fun QuickOperationsBar(
-    onNavigate: (AppScreen) -> Unit,
-    onCustomAction: (String) -> Unit
-) {
-    val ops = listOf(
-        QuickOp("سند قبض",    Icons.Default.AddCard,           Color(0xFF1B5E20), Color(0xFF43A047), null,                  "RECEIPT"),
-        QuickOp("سند صرف",    Icons.Default.MoneyOff,          Color(0xFF7B0000), Color(0xFFE53935), null,                  "PAYMENT"),
-        QuickOp("سند قيد",    Icons.Default.EditNote,          Color(0xFF0D47A1), Color(0xFF1E88E5), null,                  "JOURNAL"),
-        QuickOp("مبيعات",     Icons.Default.ReceiptLong,       Color(0xFF004D40), Color(0xFF00897B), AppScreen.SALES,       null),
-        QuickOp("مرجوع بيع",  Icons.Default.AssignmentReturn,  Color(0xFFE65100), Color(0xFFFFA726), AppScreen.SALES_RETURN, null),
-        QuickOp("مشتريات",    Icons.Default.LocalShipping,     Color(0xFF4A148C), Color(0xFF7B1FA2), AppScreen.PURCHASES,   null),
-        QuickOp("مرجوع شراء", Icons.Default.KeyboardReturn,    Color(0xFF880E4F), Color(0xFFD81B60), AppScreen.PURCHASES_RETURN, null),
-        QuickOp("إضافة صنف",  Icons.Default.AddBox,            Color(0xFF1A237E), Color(0xFF3949AB), null,               "NEW_ITEM"),
-    )
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "⚡ إنشاء عملية سريعة",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "اسحب للرؤية ←",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-        }
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
-        ) {
-            items(ops.size) { index ->
-                val op = ops[index]
-                QuickOpButton(op = op, onNavigate = onNavigate, onCustomAction = onCustomAction)
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickOpButton(
-    op: QuickOp,
-    onNavigate: (AppScreen) -> Unit,
-    onCustomAction: (String) -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .width(76.dp)
-            .clickable {
-                if (op.screen != null) onNavigate(op.screen)
-                else if (op.actionKey != null) onCustomAction(op.actionKey)
-            },
-        shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(op.gradientStart, op.gradientEnd)
-                    ),
-                    shape = RoundedCornerShape(18.dp)
-                )
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(Color.White.copy(alpha = 0.18f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = op.icon,
-                        contentDescription = op.label,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Text(
-                    text = op.label,
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    lineHeight = 12.sp,
-                    softWrap = true
-                )
-            }
-        }
-    }
-}
