@@ -372,156 +372,141 @@ fun AppDrawerContent(
 fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, onOpenDrawer: () -> Unit, onOpenCalculator: () -> Unit = {}) {
     val settings by viewModel.settings.collectAsState()
     val appName = settings?.name ?: "آفاق محاسب"
+    val currentUserState by viewModel.currentUser.collectAsState()
+    val isAdminUser = currentUserState?.username.equals("admin", ignoreCase = true) || currentUserState?.permSettings == true
+    val userName = currentUserState?.fullName?.takeIf { it.isNotBlank() } ?: "المدير العام"
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                    )
-                ),
-                shape = RoundedCornerShape(28.dp)
-            )
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // السطر الأول: اسم المؤسسة واسم المدير (يمين) والأزرار الثلاثة (يسار)
+            // Right Side: Greeting & App Name
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "مرحباً، $userName 👋",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = appName,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Left Side: Buttons
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // اسم المؤسسة واسم المدير
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                // Sync Indicator
+                val isSupabaseEnabled by viewModel.supabaseSyncManager.isSyncEnabled.collectAsState()
+                val supabaseStatus by viewModel.supabaseSyncManager.syncStatusMessage.collectAsState()
+                val isSynced = viewModel.licenseManager.isSyncedWithCompany()
+
+                if (isSynced || isSupabaseEnabled) {
+                    val indicatorColor = when {
+                        supabaseStatus.contains("متصل") || supabaseStatus.contains("نجاح") || supabaseStatus.contains("تم") -> Color(0xFF4CAF50) // Green
+                        supabaseStatus.contains("جاري") || supabaseStatus.contains("قيد") -> Color(0xFFFFC107) // Yellow
+                        else -> Color(0xFFF44336) // Red
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { onNavigate(AppScreen.SETTINGS) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(indicatorColor)
+                        )
+                    }
+                }
+
+                // Calculator
+                IconButton(
+                    onClick = onOpenCalculator,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
-                    Text(
-                        text = appName,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        imageVector = Icons.Default.Calculate,
+                        contentDescription = "آلة حاسبة",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Text(
-                        text = "مرحباً، المدير العام 👋",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                }
+                
+                // License (Shown only for Admin users)
+                if (isAdminUser) {
+                    IconButton(
+                        onClick = { onNavigate(AppScreen.LICENSE) },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = "الترخيص",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Logout
+                IconButton(
+                    onClick = { viewModel.logout() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "تسجيل الخروج",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                // الأزرار (مقابل اسم المستخدم في أقصى اليسار)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Menu Button (القائمة الجانبية)
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 ) {
-                    // Sync Indicator
-                    val isSupabaseEnabled by viewModel.supabaseSyncManager.isSyncEnabled.collectAsState()
-                    val supabaseStatus by viewModel.supabaseSyncManager.syncStatusMessage.collectAsState()
-                    val isSynced = viewModel.licenseManager.isSyncedWithCompany()
-
-                    if (isSynced || isSupabaseEnabled) {
-                        val indicatorColor = when {
-                            supabaseStatus.contains("متصل") || supabaseStatus.contains("نجاح") || supabaseStatus.contains("تم") -> Color(0xFF4CAF50) // Green
-                            supabaseStatus.contains("جاري") || supabaseStatus.contains("قيد") -> Color(0xFFFFC107) // Yellow
-                            else -> Color(0xFFF44336) // Red
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.3f))
-                                .clickable { onNavigate(AppScreen.SETTINGS) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(indicatorColor)
-                            )
-                        }
-                    }
-
-                    // Calculator
-                    IconButton(
-                        onClick = onOpenCalculator,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.3f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Calculate,
-                            contentDescription = "آلة حاسبة",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    
-                    // License (Shown only for Admin users)
-                    val currentUserState by viewModel.currentUser.collectAsState()
-                    val isAdminUser = currentUserState?.username.equals("admin", ignoreCase = true) || currentUserState?.permSettings == true
-
-                    if (isAdminUser) {
-                        IconButton(
-                            onClick = { onNavigate(AppScreen.LICENSE) },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.3f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VpnKey,
-                                contentDescription = "الترخيص",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    // Logout
-                    IconButton(
-                        onClick = { viewModel.logout() },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.3f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "تسجيل الخروج",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    // Menu Button (القائمة الجانبية)
-                    IconButton(
-                        onClick = onOpenDrawer,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "القائمة الجانبية",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "القائمة الجانبية",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
