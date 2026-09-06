@@ -147,26 +147,7 @@ fun DashboardScreen(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit) {
                 val supabaseStatus by viewModel.supabaseSyncManager.syncStatusMessage.collectAsState()
                 val isSynced = viewModel.licenseManager.isSyncedWithCompany()
 
-                if (isSynced || isSupabaseEnabled) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().clickable { onNavigate(AppScreen.SETTINGS) },
-                        color = Color(0xFFE8F5E9),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF2E7D32))
-                                Text("التزامن اللحظي:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
-                                Text(supabaseStatus, fontSize = 11.sp, color = Color(0xFF2E7D32))
-                            }
-                            Text("إعدادات ⚙️", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                } else {
+                if (!isSynced && !isSupabaseEnabled) {
                     // Trial Banner for non-synced trial account
                     val remainingDays = viewModel.licenseManager.getRemainingDays()
                     val remainingOps = viewModel.licenseManager.getRemainingOperations()
@@ -444,6 +425,35 @@ fun ImmersiveHeader(viewModel: AppViewModel, onNavigate: (AppScreen) -> Unit, on
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Sync Indicator
+                    val isSupabaseEnabled by viewModel.supabaseSyncManager.isSyncEnabled.collectAsState()
+                    val supabaseStatus by viewModel.supabaseSyncManager.syncStatusMessage.collectAsState()
+                    val isSynced = viewModel.licenseManager.isSyncedWithCompany()
+
+                    if (isSynced || isSupabaseEnabled) {
+                        val indicatorColor = when {
+                            supabaseStatus.contains("متصل") || supabaseStatus.contains("نجاح") || supabaseStatus.contains("تم") -> Color(0xFF4CAF50) // Green
+                            supabaseStatus.contains("جاري") || supabaseStatus.contains("قيد") -> Color(0xFFFFC107) // Yellow
+                            else -> Color(0xFFF44336) // Red
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.3f))
+                                .clickable { onNavigate(AppScreen.SETTINGS) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape)
+                                    .background(indicatorColor)
+                            )
+                        }
+                    }
+
                     // Calculator
                     IconButton(
                         onClick = onOpenCalculator,
