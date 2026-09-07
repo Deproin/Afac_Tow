@@ -1100,13 +1100,9 @@ class AppRepository(context: Context) {
         )
 
         val safeAcc = accountDao.getAccountById(rem.safeAccountId) ?: accountDao.getAccountByCode("1101")
-        val transferCompanyAcc = accountDao.getAccountById(rem.accountId) ?:    suspend fun getAccountByCode(code: String): Account? {
-        return database.accountDao().getAccountByCode(code)
-    }
-
-    suspend fun getMaxAccountCodeByType(type: String): Int? {
-        return database.accountDao().getMaxAccountCodeByType(type)
-    }    if (commAcc == null) {
+        val transferCompanyAcc = accountDao.getAccountById(rem.accountId)
+        var commAcc = accountDao.getAccountByCode("4102")
+        if (commAcc == null) {
             val revenueParent = accountDao.getAccountByCode("4")
             var newCommAcc = Account(code = "4102", name = "إيرادات العمولات", type = "REVENUE", parentId = revenueParent?.id)
             val insertedId = accountDao.insertAccount(newCommAcc)
