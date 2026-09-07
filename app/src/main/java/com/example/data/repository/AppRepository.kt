@@ -1206,7 +1206,7 @@ class AppRepository(context: Context) {
     suspend fun transferStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, fromWarehouseId: Long, toWarehouseId: Long, generalNotes: String) = withContext(Dispatchers.IO) {
         db.withTransaction {
             for (entry in entries) {
-                val baseQty = entry.quantity * entry.conversionFactor
+                val baseQty = entry.quantity
 
                 var fromStock = itemStockDao.getStockForItemAndWarehouse(entry.itemId, fromWarehouseId)
                 if (fromStock == null) {
