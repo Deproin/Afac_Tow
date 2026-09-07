@@ -441,13 +441,13 @@ data class Partner(
     val isDeleted: Boolean = false
 )
 
-fun getArabicAccountType(type: String): String {
     return when (type) {
         "ASSETS" -> "أصول"
         "LIABILITIES" -> "خصوم"
         "EQUITY" -> "حقوق ملكية"
         "REVENUE" -> "إيرادات"
         "EXPENSES" -> "مصروفات"
+        else -> type
     }
 }
 

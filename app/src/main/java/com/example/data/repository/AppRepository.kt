@@ -5,6 +5,7 @@ import com.example.data.database.AppDatabase
 import com.example.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext

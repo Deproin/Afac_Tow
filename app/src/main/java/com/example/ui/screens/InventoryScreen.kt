@@ -495,6 +495,7 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                 }
                             }
                         }
+                    }
                 }
                 3 -> {
                     // TAB 3: ITEM MOVEMENTS REPORT
