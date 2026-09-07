@@ -18,6 +18,7 @@ class AppRepository(context: Context) {
     val userDao = db.userDao()
     val itemDao = db.itemDao()
     val itemUnitDao = db.itemUnitDao()
+    val globalUnitDao = db.globalUnitDao()
     val warehouseDao = db.warehouseDao()
     val itemStockDao = db.itemStockDao()
     val stockTransferDao = db.stockTransferDao()
@@ -1202,7 +1203,34 @@ class AppRepository(context: Context) {
         }
     }
 
-    suspend fun supplyStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = withContext(Dispatchers.IO) {
+    suspend fun transferStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, fromWarehouseId: Long, toWarehouseId: Long, generalNotes: String) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            for (entry in entries) {
+                val baseQty = entry.quantity * entry.conversionFactor
+
+                var fromStock = itemStockDao.getStockForItemAndWarehouse(entry.itemId, fromWarehouseId)
+                if (fromStock == null) {
+                    val newStock = ItemStock(itemId = entry.itemId, warehouseId = fromWarehouseId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    val id = itemStockDao.insertItemStock(newStock)
+                    fromStock = newStock.copy(id = id)
+                }
+                
+                var toStock = itemStockDao.getStockForItemAndWarehouse(entry.itemId, toWarehouseId)
+                if (toStock == null) {
+                    val newStock = ItemStock(itemId = entry.itemId, warehouseId = toWarehouseId, quantity = 0.0, syncState = "PENDING_ADD", syncId = java.util.UUID.randomUUID().toString())
+                    val id = itemStockDao.insertItemStock(newStock)
+                    toStock = newStock.copy(id = id)
+                }
+
+                itemStockDao.updateItemStock(fromStock.copy(quantity = fromStock.quantity - baseQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+                itemStockDao.updateItemStock(toStock.copy(quantity = toStock.quantity + baseQty, syncState = "PENDING_UPDATE", updatedAt = System.currentTimeMillis()))
+            }
+            logOperation("تحويل مخزني", "stock_transfers", "تحويل ${entries.size} أصناف من مستودع $fromWarehouseId إلى $toWarehouseId. البيان: $generalNotes")
+        }
+    }
+
+
+    suspend fun supplyStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String, accountId: Long? = null) = withContext(Dispatchers.IO) {
         db.withTransaction {
             val invoiceNum = "SUP-" + (10000000..99999999).random()
             var total = 0.0
@@ -1277,20 +1305,28 @@ class AppRepository(context: Context) {
                 )
                 
                 val invAcc = accountDao.getAccountByCode("1103")
-                var adjAcc = accountDao.getAccountByCode("3102") // Stock Adjustments / Opening Balance
-                if (adjAcc == null) {
-                    val equityParent = accountDao.getAccountByCode("3")
-                    val insertedId = accountDao.insertAccount(Account(code = "3102", name = "تسويات مخزنية ورأس مال", type = "EQUITY", parentId = equityParent?.id))
-                    adjAcc = accountDao.getAccountById(insertedId)
+                var targetAcc = if (accountId != null) accountDao.getAccountById(accountId) else null
+                if (targetAcc == null) {
+                    var adjAcc = accountDao.getAccountByCode("3102") // Stock Adjustments / Opening Balance
+                    if (adjAcc == null) {
+                        val equityParent = accountDao.getAccountByCode("3")
+                        val insertedId = accountDao.insertAccount(Account(code = "3102", name = "تسويات مخزنية ورأس مال", type = "EQUITY", parentId = equityParent?.id))
+                        adjAcc = accountDao.getAccountById(insertedId)
+                    }
+                    targetAcc = adjAcc
                 }
 
                 invAcc?.let {
                     journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = total, credit = 0.0, description = "توريد مخزني"))
                     accountDao.updateAccount(it.copy(balance = it.balance + total))
                 }
-                adjAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = total, description = "توريد مخزني مقابل تسويات"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + total)) // EQUITY increases by credit
+                targetAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = total, description = if (accountId != null) "توريد مخزني" else "توريد مخزني مقابل تسويات"))
+                    val newBal = when (it.type) {
+                        "ASSETS", "EXPENSES" -> it.balance - total // Credit decreases assets/expenses
+                        else -> it.balance + total // Credit increases liabilities/equity/revenue
+                    }
+                    accountDao.updateAccount(it.copy(balance = newBal))
                 }
             }
 
@@ -1298,7 +1334,7 @@ class AppRepository(context: Context) {
         }
     }
 
-    suspend fun issueStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = withContext(Dispatchers.IO) {
+    suspend fun issueStockMulti(entries: List<com.example.ui.viewmodel.StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String, accountId: Long? = null) = withContext(Dispatchers.IO) {
         db.withTransaction {
             val invoiceNum = "ISS-" + (10000000..99999999).random()
             var total = 0.0
@@ -1371,16 +1407,24 @@ class AppRepository(context: Context) {
                 )
                 
                 val invAcc = accountDao.getAccountByCode("1103")
-                var adjAcc = accountDao.getAccountByCode("5104") // Stock Adjustments Expenses
-                if (adjAcc == null) {
-                    val expensesParent = accountDao.getAccountByCode("5")
-                    val insertedId = accountDao.insertAccount(Account(code = "5104", name = "خسائر وتسويات مخزنية", type = "EXPENSES", parentId = expensesParent?.id))
-                    adjAcc = accountDao.getAccountById(insertedId)
+                var targetAcc = if (accountId != null) accountDao.getAccountById(accountId) else null
+                if (targetAcc == null) {
+                    var adjAcc = accountDao.getAccountByCode("5104") // Stock Adjustments Expenses
+                    if (adjAcc == null) {
+                        val expensesParent = accountDao.getAccountByCode("5")
+                        val insertedId = accountDao.insertAccount(Account(code = "5104", name = "خسائر وتسويات مخزنية", type = "EXPENSES", parentId = expensesParent?.id))
+                        adjAcc = accountDao.getAccountById(insertedId)
+                    }
+                    targetAcc = adjAcc
                 }
 
-                adjAcc?.let {
-                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = total, credit = 0.0, description = "صرف مخزني مقابل تسويات"))
-                    accountDao.updateAccount(it.copy(balance = it.balance + total)) // EXPENSES increases by debit
+                targetAcc?.let {
+                    journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = total, credit = 0.0, description = if (accountId != null) "صرف مخزني" else "صرف مخزني مقابل تسويات"))
+                    val newBal = when (it.type) {
+                        "ASSETS", "EXPENSES" -> it.balance + total // Debit increases assets/expenses
+                        else -> it.balance - total // Debit decreases liabilities/equity/revenue
+                    }
+                    accountDao.updateAccount(it.copy(balance = newBal))
                 }
                 invAcc?.let {
                     journalDao.insertEntryLine(JournalEntryLine(journalEntryId = jEntryId, accountId = it.id, debit = 0.0, credit = total, description = "صرف مخزني"))
@@ -1546,5 +1590,18 @@ class AppRepository(context: Context) {
                 )
             }
         }
+    }
+    
+    // --- Global Units Methods ---
+    fun getAllGlobalUnits(): Flow<List<GlobalUnit>> {
+        return globalUnitDao.getAllGlobalUnits()
+    }
+    
+    suspend fun addGlobalUnit(name: String) = withContext(Dispatchers.IO) {
+        globalUnitDao.insertGlobalUnit(GlobalUnit(name = name))
+    }
+    
+    suspend fun deleteGlobalUnit(id: Long) = withContext(Dispatchers.IO) {
+        globalUnitDao.softDeleteGlobalUnit(id)
     }
 }

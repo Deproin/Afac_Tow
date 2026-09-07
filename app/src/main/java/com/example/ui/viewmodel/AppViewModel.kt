@@ -190,6 +190,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val items = repository.itemDao.getAllItems()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val globalUnits = repository.getAllGlobalUnits()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val itemStocks = repository.itemStockDao.getAllItemStocks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -631,16 +634,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         repository.deleteAuditLog(log)
     }
 
+    fun addGlobalUnit(name: String) = viewModelScope.launch {
+        repository.addGlobalUnit(name)
+    }
+
+    fun deleteGlobalUnit(id: Long) = viewModelScope.launch {
+        repository.deleteGlobalUnit(id)
+    }
+
     fun transferStock(from: Long, to: Long, itemId: Long, qty: Double, notes: String) = viewModelScope.launch {
         repository.createStockTransfer(from, to, itemId, qty, notes)
     }
 
-    fun supplyStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = viewModelScope.launch {
-        repository.supplyStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes)
+    fun transferStockMulti(entries: List<StockSupplyEntry>, fromWarehouseId: Long, toWarehouseId: Long, generalNotes: String) = viewModelScope.launch {
+        repository.transferStockMulti(entries, fromWarehouseId, toWarehouseId, generalNotes)
     }
 
-    fun issueStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String) = viewModelScope.launch {
-        repository.issueStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes)
+    fun supplyStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String, accountId: Long? = null) = viewModelScope.launch {
+        repository.supplyStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes, accountId)
+    }
+
+    fun issueStockMulti(entries: List<StockSupplyEntry>, warehouseId: Long, currencyCode: String, exchangeRate: Double, generalNotes: String, accountId: Long? = null) = viewModelScope.launch {
+        repository.issueStockMulti(entries, warehouseId, currencyCode, exchangeRate, generalNotes, accountId)
     }
 
     fun clearAllAuditLogs() = viewModelScope.launch {

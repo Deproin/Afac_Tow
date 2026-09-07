@@ -45,6 +45,8 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val itemUnits by viewModel.itemUnits.collectAsState()
     val itemMovements by viewModel.itemMovements.collectAsState()
     val selectedMovementItem by viewModel.selectedMovementItem.collectAsState()
+    val accounts by viewModel.accounts.collectAsState(initial = emptyList())
+    val globalUnits by viewModel.globalUnits.collectAsState()
 
     val tempUnits = remember { mutableStateListOf<ItemUnit>() }
 
@@ -83,6 +85,8 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     var supplyQtyInput by remember { mutableStateOf("10.0") }
     var supplyCostInput by remember { mutableStateOf("") }
     var supplyNotesInput by remember { mutableStateOf("") }
+    var supplySelectedAccountId by remember { mutableStateOf<Long?>(null) }
+    var issueSelectedAccountId by remember { mutableStateOf<Long?>(null) }
 
     // Handle pendingDialogToOpen from Dashboard Quick Operations
     LaunchedEffect(viewModel.pendingDialogToOpen) {
@@ -124,11 +128,12 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     var showExcelMenu by remember { mutableStateOf(false) }
 
-    val dynamicUnits = remember(items, itemUnits) {
+    val dynamicUnits = remember(items, itemUnits, globalUnits) {
         val baseUnits = PRESET_UNITS
+        val globalUnitNames = globalUnits.map { it.name }
         val usedItemUnits = items.map { it.unit }.filter { it.isNotBlank() }
         val usedSubUnits = itemUnits.map { it.unitName }.filter { it.isNotBlank() }
-        (baseUnits + usedItemUnits + usedSubUnits).distinct()
+        (baseUnits + globalUnitNames + usedItemUnits + usedSubUnits).distinct()
     }
 
     val csvPickerLauncher = rememberLauncherForActivityResult(
@@ -607,7 +612,8 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                     showAddItemDialog = false
                 },
                 onAddSubUnit = { tempUnits.add(it) },
-                onDeleteSubUnit = { tempUnits.remove(it) }
+                onDeleteSubUnit = { tempUnits.remove(it) },
+                onAddPresetUnit = { viewModel.addGlobalUnit(it) }
             )
         }
 
@@ -626,7 +632,8 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                     selectedItemForEdit = null
                 },
                 onAddSubUnit = { viewModel.addItemUnit(it) },
-                onDeleteSubUnit = { viewModel.deleteItemUnit(it) }
+                onDeleteSubUnit = { viewModel.deleteItemUnit(it) },
+                onAddPresetUnit = { viewModel.addGlobalUnit(it) }
             )
         }
 
@@ -655,76 +662,13 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             )
         }
 
-        // Stock Transfer Dialog between Warehouses
+        // Stock Transfer Dialog between Warehouses (Multi-item Voucher)
         if (showStockTransferDialog) {
-            AlertDialog(
-                onDismissRequest = { showStockTransferDialog = false },
-                title = { Text("إجراء تحويل مخزني بين المستودعات", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("الصنف المراد تحويله:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        DropdownSelector(
-                            options = items.map { "${it.name} (متوفر: ${it.currentQuantity} ${it.unit})" },
-                            selectedOption = transferItem?.name ?: "اختر الصنف",
-                            onOptionSelected = { selectedStr ->
-                                transferItem = items.firstOrNull { selectedStr.startsWith(it.name) }
-                            }
-                        )
-
-                        Text("من المستودع (المستند منه):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        DropdownSelector(
-                            options = warehouses.map { it.name },
-                            selectedOption = transferFromWarehouse?.name ?: "المستودع الرئيسي",
-                            onOptionSelected = { selectedW ->
-                                transferFromWarehouse = warehouses.firstOrNull { it.name == selectedW }
-                            }
-                        )
-
-                        Text("إلى المستودع (المحول إليه):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        DropdownSelector(
-                            options = warehouses.map { it.name },
-                            selectedOption = transferToWarehouse?.name ?: "الفرع الثاني",
-                            onOptionSelected = { selectedW ->
-                                transferToWarehouse = warehouses.firstOrNull { it.name == selectedW }
-                            }
-                        )
-
-                        OutlinedTextField(
-                            value = transferQtyInput,
-                            onValueChange = { transferQtyInput = it },
-                            label = { Text("الكمية المحولة") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        OutlinedTextField(
-                            value = transferNotesInput,
-                            onValueChange = { transferNotesInput = it },
-                            label = { Text("بيان التحويل والملاحظات") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            val qty = transferQtyInput.toDoubleOrNull() ?: 0.0
-                            if (transferItem != null && transferFromWarehouse != null && transferToWarehouse != null && qty > 0) {
-                                viewModel.transferStock(
-                                    from = transferFromWarehouse!!.id,
-                                    to = transferToWarehouse!!.id,
-                                    itemId = transferItem!!.id,
-                                    qty = qty,
-                                    notes = transferNotesInput
-                                )
-                                showStockTransferDialog = false
-                            }
-                        }
-                    ) { Text("تأكيد وترحيل التحويل", color = Color.White) }
-                },
-                dismissButton = { TextButton(onClick = { showStockTransferDialog = false }) { Text("إلغاء") } }
+            MultiItemStockTransferDialog(
+                onDismiss = { showStockTransferDialog = false },
+                items = items,
+                warehouses = warehouses,
+                viewModel = viewModel
             )
         }
 
@@ -845,6 +789,9 @@ fun MultiItemStockSupplyDialog(
     var selectedCurrencyCode by remember { mutableStateOf("YER") }
     var exchangeRateInput by remember { mutableStateOf("1.0") }
     var generalNotes by remember { mutableStateOf("") }
+    
+    val accounts by viewModel.accounts.collectAsState(initial = emptyList())
+    var selectedAccountId by remember { mutableStateOf<Long?>(null) }
 
     // Item selection form state
     var selectedItemToAdd by remember { mutableStateOf<Item?>(null) }
@@ -913,6 +860,30 @@ fun MultiItemStockSupplyDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Account Selection (Optional)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("حساب التأثير المالي (اختياري - يرحل افتراضياً لتسويات مخزنية)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val accountOptions = listOf("الافتراضي (تسويات مخزنية)") + accounts.map { "${it.name} (${it.code})" }
+                            val currentAccOption = if (selectedAccountId == null) "الافتراضي (تسويات مخزنية)" else accounts.find { it.id == selectedAccountId }?.let { "${it.name} (${it.code})" } ?: "الافتراضي (تسويات مخزنية)"
+                            DropdownSelector(
+                                options = accountOptions,
+                                selectedOption = currentAccOption,
+                                onOptionSelected = { selected ->
+                                    if (selected == "الافتراضي (تسويات مخزنية)") {
+                                        selectedAccountId = null
+                                    } else {
+                                        val matched = accounts.find { "${it.name} (${it.code})" == selected }
+                                        selectedAccountId = matched?.id
+                                    }
+                                }
+                            )
+                        }
+                    }
                     // Warehouse & Currency Row
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -1162,7 +1133,8 @@ fun MultiItemStockSupplyDialog(
                                     warehouseId = wId,
                                     currencyCode = selectedCurrencyCode,
                                     exchangeRate = exchangeRate,
-                                    generalNotes = generalNotes.trim()
+                                    generalNotes = generalNotes.trim(),
+                                    accountId = selectedAccountId
                                 )
                                 onDismiss()
                                 Toast.makeText(context, "✅ تم حفظ سند التوريد المخزني بنجاح (${supplyBasket.size} أصناف)", Toast.LENGTH_LONG).show()
@@ -1193,7 +1165,8 @@ fun ItemFormDialog(
     onDismiss: () -> Unit,
     onSave: (Item, List<ItemUnit>) -> Unit,
     onAddSubUnit: (ItemUnit) -> Unit,
-    onDeleteSubUnit: (ItemUnit) -> Unit
+    onDeleteSubUnit: (ItemUnit) -> Unit,
+    onAddPresetUnit: (String) -> Unit = {}
 ) {
     var dialogTab by remember { mutableIntStateOf(0) }
     val isEdit = initialItem != null
@@ -1458,13 +1431,58 @@ fun ItemFormDialog(
 
                     2 -> {
                         // TAB 3: INVENTORY & MULTI-UNITS
-                        Text("الوحدة الأساسية للصنف (اختر أو اكتب وحدة جديدة):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        DropdownSelector(
-                            options = presetUnits,
-                            selectedOption = unit,
-                            onOptionSelected = { unit = it }
-                        )
-
+                        Text("الوحدة الأساسية للصنف:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                DropdownSelector(
+                                    options = presetUnits,
+                                    selectedOption = unit,
+                                    onOptionSelected = { unit = it }
+                                )
+                            }
+                            var showAddUnitDialog by remember { mutableStateOf(false) }
+                            if (showAddUnitDialog) {
+                                var newUnitName by remember { mutableStateOf("") }
+                                AlertDialog(
+                                    onDismissRequest = { showAddUnitDialog = false },
+                                    title = { Text("إضافة وحدة جديدة") },
+                                    text = {
+                                        OutlinedTextField(
+                                            value = newUnitName,
+                                            onValueChange = { newUnitName = it },
+                                            label = { Text("اسم الوحدة (مثال: طن، ربطة)") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    },
+                                    confirmButton = {
+                                        Button(onClick = {
+                                            if (newUnitName.isNotBlank()) {
+                                                onAddPresetUnit(newUnitName.trim())
+                                                unit = newUnitName.trim()
+                                                showAddUnitDialog = false
+                                            }
+                                        }) { Text("إضافة") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showAddUnitDialog = false }) { Text("إلغاء") }
+                                    }
+                                )
+                            }
+                            IconButton(
+                                onClick = { showAddUnitDialog = true },
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(8.dp))
+                                    .size(48.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "إضافة وحدة جديدة", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                        }
+                        
                         if (!isEdit) {
                             OutlinedTextField(
                                 value = initialQty,
@@ -1606,14 +1624,25 @@ fun DropdownSelector(
     onOptionSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var text by remember(selectedOption) { mutableStateOf(selectedOption) }
+    var textFieldValue by remember { 
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(selectedOption)) 
+    }
+
+    LaunchedEffect(selectedOption) {
+        if (textFieldValue.text != selectedOption) {
+            textFieldValue = textFieldValue.copy(
+                text = selectedOption,
+                selection = androidx.compose.ui.text.TextRange(selectedOption.length)
+            )
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onOptionSelected(it)
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                textFieldValue = newValue
+                onOptionSelected(newValue.text)
                 expanded = true
             },
             modifier = Modifier.fillMaxWidth(),
@@ -1634,13 +1663,13 @@ fun DropdownSelector(
             onDismissRequest = { expanded = false },
             modifier = Modifier.fillMaxWidth(0.85f)
         ) {
-            val filteredOptions = if (text.isEmpty()) options else options.filter { it.contains(text, ignoreCase = true) }
+            val filteredOptions = if (textFieldValue.text.isEmpty()) options else options.filter { it.contains(textFieldValue.text, ignoreCase = true) }
             
-            if (filteredOptions.isEmpty() && text.isNotEmpty()) {
+            if (filteredOptions.isEmpty() && textFieldValue.text.isNotEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("إضافة كخيار جديد: $text", color = MaterialTheme.colorScheme.primary) },
+                    text = { Text("إضافة كخيار جديد: ${textFieldValue.text}", color = MaterialTheme.colorScheme.primary) },
                     onClick = {
-                        onOptionSelected(text)
+                        onOptionSelected(textFieldValue.text)
                         expanded = false
                     }
                 )
@@ -1660,7 +1689,10 @@ fun DropdownSelector(
                             }
                         },
                         onClick = {
-                            text = item
+                            textFieldValue = textFieldValue.copy(
+                                text = item,
+                                selection = androidx.compose.ui.text.TextRange(item.length)
+                            )
                             onOptionSelected(item)
                             expanded = false
                         }
@@ -1983,6 +2015,9 @@ fun MultiItemStockIssueDialog(
     var selectedCurrencyCode by remember { mutableStateOf("YER") }
     var exchangeRateInput by remember { mutableStateOf("1.0") }
     var generalNotes by remember { mutableStateOf("") }
+    
+    val accounts by viewModel.accounts.collectAsState(initial = emptyList())
+    var selectedAccountId by remember { mutableStateOf<Long?>(null) }
 
     // Item selection form state
     var selectedItemToAdd by remember { mutableStateOf<Item?>(null) }
@@ -2050,6 +2085,30 @@ fun MultiItemStockIssueDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Account Selection (Optional)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("حساب التأثير المالي (اختياري - يرحل افتراضياً لتسويات مخزنية)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val accountOptions = listOf("الافتراضي (خسائر وتسويات)") + accounts.map { "${it.name} (${it.code})" }
+                            val currentAccOption = if (selectedAccountId == null) "الافتراضي (خسائر وتسويات)" else accounts.find { it.id == selectedAccountId }?.let { "${it.name} (${it.code})" } ?: "الافتراضي (خسائر وتسويات)"
+                            DropdownSelector(
+                                options = accountOptions,
+                                selectedOption = currentAccOption,
+                                onOptionSelected = { selected ->
+                                    if (selected == "الافتراضي (خسائر وتسويات)") {
+                                        selectedAccountId = null
+                                    } else {
+                                        val matched = accounts.find { "${it.name} (${it.code})" == selected }
+                                        selectedAccountId = matched?.id
+                                    }
+                                }
+                            )
+                        }
+                    }
                     // Warehouse & Currency Row
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -2279,7 +2338,8 @@ fun MultiItemStockIssueDialog(
                                     warehouseId = wId,
                                     currencyCode = selectedCurrencyCode,
                                     exchangeRate = exchangeRate,
-                                    generalNotes = generalNotes.trim()
+                                    generalNotes = generalNotes.trim(),
+                                    accountId = selectedAccountId
                                 )
                                 onDismiss()
                                 Toast.makeText(context, "✅ تم حفظ سند الصرف المخزني بنجاح", Toast.LENGTH_LONG).show()
@@ -2294,6 +2354,249 @@ fun MultiItemStockIssueDialog(
                         Icon(Icons.Default.CheckCircle, contentDescription = "حفظ")
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("اعتماد وحفظ الصرف 📤", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MultiItemStockTransferDialog(
+    onDismiss: () -> Unit,
+    items: List<Item>,
+    warehouses: List<Warehouse>,
+    viewModel: AppViewModel
+) {
+    val context = LocalContext.current
+    var selectedFromWarehouse by remember { mutableStateOf<Warehouse?>(warehouses.firstOrNull()) }
+    var selectedToWarehouse by remember { mutableStateOf<Warehouse?>(warehouses.getOrNull(1)) }
+    var generalNotes by remember { mutableStateOf("") }
+    val transferBasket = remember { mutableStateListOf<Pair<Item, com.example.ui.viewmodel.StockSupplyEntry>>() }
+
+    // Form inputs
+    var selectedItemToAdd by remember { mutableStateOf<Item?>(null) }
+    var qtyInput by remember { mutableStateOf("1") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("سند تحويل مخزني", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = onDismiss, modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)) {
+                        Icon(Icons.Default.Close, contentDescription = "إغلاق")
+                    }
+                }
+                
+                Divider()
+
+                // Warehouse Selection
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("بيانات المخازن", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("المخزن المحول منه:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                DropdownSelector(
+                                    options = warehouses.map { it.name },
+                                    selectedOption = selectedFromWarehouse?.name ?: "",
+                                    onOptionSelected = { selected ->
+                                        selectedFromWarehouse = warehouses.find { it.name == selected }
+                                    }
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("المخزن المحول إليه:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                DropdownSelector(
+                                    options = warehouses.map { it.name },
+                                    selectedOption = selectedToWarehouse?.name ?: "",
+                                    onOptionSelected = { selected ->
+                                        selectedToWarehouse = warehouses.find { it.name == selected }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Add Item Configurator Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("➕ إضافة صنف للتحويل", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+
+                        Text("اختر الصنف:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        DropdownSelector(
+                            options = items.map { "${it.name} (${it.code}) [المتوفر: ${it.currentQuantity}]" },
+                            selectedOption = selectedItemToAdd?.let { "${it.name} (${it.code}) [المتوفر: ${it.currentQuantity}]" } ?: "اختر الصنف",
+                            onOptionSelected = { selected ->
+                                val matched = items.find { selected.startsWith("${it.name} (${it.code})") }
+                                selectedItemToAdd = matched
+                            }
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = qtyInput,
+                                onValueChange = { qtyInput = it },
+                                label = { Text("كمية التحويل *") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                val item = selectedItemToAdd
+                                val qty = qtyInput.toDoubleOrNull() ?: 0.0
+                                if (item != null && qty > 0) {
+                                    if (qty > item.currentQuantity) {
+                                        Toast.makeText(context, "تنبيه: الكمية المحولة أكبر من المتوفر (${item.currentQuantity})", Toast.LENGTH_SHORT).show()
+                                    }
+                                    val entry = com.example.ui.viewmodel.StockSupplyEntry(
+                                        itemId = item.id,
+                                        quantity = qty,
+                                        unitCostInCurrency = item.purchasePrice,
+                                        expiryDate = ""
+                                    )
+                                    transferBasket.add(Pair(item, entry))
+                                    qtyInput = "1"
+                                    Toast.makeText(context, "تمت إضافة ${item.name} إلى سند التحويل", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "يرجى اختيار الصنف وتحديد كمية صحيحة", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "إضافة")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("إدراج ضمن قائمة التحويل", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Basket Table
+                if (transferBasket.isNotEmpty()) {
+                    Text("📋 الأصناف المضافة للتحويل (${transferBasket.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                    
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            transferBasket.forEachIndexed { idx, row ->
+                                val (item, entry) = row
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1.5f)) {
+                                        Text(item.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("الرمز: ${item.code}", fontSize = 10.sp, color = Color.Gray)
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                                        Text("الكمية: ${entry.quantity} ${item.unit}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                    }
+
+                                    IconButton(
+                                        onClick = { transferBasket.removeAt(idx) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = generalNotes,
+                    onValueChange = { generalNotes = it },
+                    label = { Text("بيان التحويل أو رقم الإرسالية / ملاحظات") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("إلغاء") }
+
+                    Button(
+                        onClick = {
+                            if (selectedFromWarehouse == null || selectedToWarehouse == null) {
+                                Toast.makeText(context, "يرجى تحديد المخازن أولاً", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (selectedFromWarehouse!!.id == selectedToWarehouse!!.id) {
+                                Toast.makeText(context, "المخزن المحول منه وإليه نفس المخزن!", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (transferBasket.isNotEmpty()) {
+                                val entriesList = transferBasket.map { it.second }
+                                viewModel.transferStockMulti(
+                                    entries = entriesList,
+                                    fromWarehouseId = selectedFromWarehouse!!.id,
+                                    toWarehouseId = selectedToWarehouse!!.id,
+                                    generalNotes = generalNotes.trim()
+                                )
+                                onDismiss()
+                                Toast.makeText(context, "✅ تم ترحيل سند التحويل بنجاح", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "يرجى إضافة صنف واحد على الأقل", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = "حفظ")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("اعتماد وحفظ التحويل 🚚", fontWeight = FontWeight.Bold)
                     }
                 }
             }

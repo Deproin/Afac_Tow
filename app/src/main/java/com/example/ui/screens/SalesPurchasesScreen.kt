@@ -1101,17 +1101,18 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
             // Invoice Cart items
             Text(if (isReturn) "السلع المرتجعة (${cartItems.size})" else "السلع المضافة للفاتورة (${cartItems.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
 
-            Box(modifier = Modifier.weight(1f)) {
+            Box(modifier = Modifier.fillMaxWidth()) {
                 if (cartItems.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
                         Text("السلة فارغة. ابحث عن صنف وأضفه للبدء.", color = Color.Gray)
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(cartItems) { (item, invItem) ->
+                        cartItems.forEach { (item, invItem) ->
+                            key(item.id, invItem.unitName) {
                             var expandedUnitDropdown by remember { mutableStateOf(false) }
                             val availableUnits = itemUnits.filter { it.itemId == item.id }
                             val selectableUnits = listOf(
@@ -1281,6 +1282,7 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                                         modifier = Modifier.size(32.dp)
                                     ) { Icon(Icons.Default.AddCircleOutline, contentDescription = "زائد") }
                                 }
+                            }
                             }
                         }
                     }

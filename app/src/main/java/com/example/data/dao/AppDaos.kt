@@ -433,6 +433,18 @@ interface EnterpriseSettingDao {
 }
 
 @Dao
+interface GlobalUnitDao {
+    @Query("SELECT * FROM global_units WHERE isDeleted = 0 ORDER BY id ASC")
+    fun getAllGlobalUnits(): Flow<List<GlobalUnit>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGlobalUnit(unit: GlobalUnit): Long
+
+    @Query("UPDATE global_units SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDeleteGlobalUnit(id: Long)
+}
+
+@Dao
 interface ItemUnitDao {
     @Query("SELECT * FROM item_units WHERE isDeleted = 0 ORDER BY id ASC")
     fun getAllItemUnits(): Flow<List<ItemUnit>>

@@ -231,6 +231,24 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `global_units` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                `name` TEXT NOT NULL, 
+                `isDeleted` INTEGER NOT NULL
+            )
+        """.trimIndent())
+        
+        // Pre-populate with default units
+        val defaultUnits = listOf("حبة", "قطعة", "علبة", "كرتون", "صندوق", "باكيت", "درزن", "كيلو", "جرام", "متر", "لتر", "طقم", "حزمة", "جالون", "شدّة")
+        for (unit in defaultUnits) {
+            db.execSQL("INSERT INTO `global_units` (`name`, `isDeleted`) VALUES ('$unit', 0)")
+        }
+    }
+}
+
 @Database(
     entities = [
         User::class,
@@ -253,14 +271,16 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
         CurrencyExchange::class,
         AccountBalance::class,
         ItemStock::class,
-        Partner::class
+        Partner::class,
+        GlobalUnit::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
+    abstract fun globalUnitDao(): GlobalUnitDao
     abstract fun itemDao(): ItemDao
     abstract fun itemUnitDao(): ItemUnitDao
     abstract fun warehouseDao(): WarehouseDao
@@ -294,7 +314,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 .addMigrations(
                     MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_1_10
+                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_1_10
                 )
                 .build()
                 INSTANCE = instance

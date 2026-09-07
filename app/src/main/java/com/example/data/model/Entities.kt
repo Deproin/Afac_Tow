@@ -66,6 +66,14 @@ data class Item(
     val isDeleted: Boolean = false
 )
 
+@Entity(tableName = "global_units")
+data class GlobalUnit(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val isDeleted: Boolean = false
+)
+
+
 @Entity(tableName = "item_units")
 data class ItemUnit(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
