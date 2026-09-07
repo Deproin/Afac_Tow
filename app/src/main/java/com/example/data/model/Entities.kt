@@ -441,6 +441,7 @@ data class Partner(
     val isDeleted: Boolean = false
 )
 
+fun getArabicAccountType(type: String): String {
     return when (type) {
         "ASSETS" -> "أصول"
         "LIABILITIES" -> "خصوم"
