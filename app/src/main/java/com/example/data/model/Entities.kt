@@ -289,6 +289,8 @@ data class JournalEntryLine(
     val debit: Double = 0.0,
     val credit: Double = 0.0,
     val description: String = "",
+    val currencyCode: String = "ر.ي",
+    val exchangeRate: Double = 1.0,
     
     val syncState: String = "PENDING_ADD",
     val updatedAt: Long = System.currentTimeMillis(),
@@ -446,6 +448,30 @@ fun getArabicAccountType(type: String): String {
         "EQUITY" -> "حقوق ملكية"
         "REVENUE" -> "إيرادات"
         "EXPENSES" -> "مصروفات"
-        else -> type
     }
 }
+
+data class ItemTransactionRaw(
+    val timestamp: Long,
+    val invoiceNumber: String,
+    val invoiceType: String,
+    val itemName: String,
+    val itemId: Long,
+    val quantity: Double,
+    val unitPrice: Double,
+    val purchasePrice: Double
+)
+
+data class ItemMovementDto(
+    val timestamp: Long,
+    val invoiceNumber: String,
+    val invoiceType: String,
+    val itemName: String,
+    val itemId: Long,
+    val inwardQty: Double,
+    val outwardQty: Double,
+    val unitPrice: Double,
+    val costPrice: Double,
+    val balance: Double,
+    val profitMargin: Double?
+)

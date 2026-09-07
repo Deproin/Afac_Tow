@@ -44,7 +44,9 @@ data class JournalLineInput(
     val accountId: Long? = null,
     val debit: String = "",
     val credit: String = "",
-    val description: String = ""
+    val description: String = "",
+    val currencyCode: String = "ر.ي",
+    val exchangeRate: String = "1.0"
 )
 
 fun printVoucher(context: Context, htmlContent: String, txId: Long) {
@@ -798,10 +800,29 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                         Text("نوع الحساب المالي:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             val types = listOf("ASSETS" to "أصول", "LIABILITIES" to "خصوم", "EQUITY" to "ملكيتها", "INCOME" to "إيراد", "EXPENSES" to "مصروف")
+                            val scope = rememberCoroutineScope()
                             types.forEach { t ->
                                 FilterChip(
                                     selected = accType == t.first,
-                                    onClick = { accType = t.first },
+                                    onClick = { 
+                                        accType = t.first
+                                        scope.launch {
+                                            val maxCode = viewModel.getMaxAccountCodeByType(t.first)
+                                            if (maxCode != null) {
+                                                accCode = (maxCode + 1).toString()
+                                            } else {
+                                                // Default prefixes if no accounts exist
+                                                accCode = when(t.first) {
+                                                    "ASSETS" -> "1101"
+                                                    "LIABILITIES" -> "2101"
+                                                    "EQUITY" -> "3101"
+                                                    "INCOME" -> "4101"
+                                                    "EXPENSES" -> "5101"
+                                                    else -> "1"
+                                                }
+                                            }
+                                        }
+                                    },
                                     label = { Text(t.second, fontSize = 10.sp) }
                                 )
                             }
@@ -1404,7 +1425,7 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                                                         this[index] = line.copy(debit = valText, credit = if (valText.isNotEmpty()) "" else line.credit)
                                                     }
                                                 },
-                                                label = { Text("مدين (ر.ي)", fontSize = 10.sp) },
+                                                label = { Text("مدين (محلي)", fontSize = 10.sp) },
                                                 modifier = Modifier.weight(1f),
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1416,7 +1437,55 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                                                         this[index] = line.copy(credit = valText, debit = if (valText.isNotEmpty()) "" else line.debit)
                                                     }
                                                 },
-                                                label = { Text("دائن (ر.ي)", fontSize = 10.sp) },
+                                                label = { Text("دائن (محلي)", fontSize = 10.sp) },
+                                                modifier = Modifier.weight(1f),
+                                                singleLine = true,
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                            )
+                                        }
+
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            var expandedCurrency by remember { mutableStateOf(false) }
+                                            val currencyOptions = listOf("ر.ي", "دولار أمريكي", "ريال سعودي", "درهم إماراتي")
+                                            
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                OutlinedButton(
+                                                    onClick = { expandedCurrency = true },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(line.currencyCode, fontSize = 10.sp)
+                                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم")
+                                                    }
+                                                }
+                                                DropdownMenu(
+                                                    expanded = expandedCurrency,
+                                                    onDismissRequest = { expandedCurrency = false },
+                                                    modifier = Modifier.fillMaxWidth(0.5f)
+                                                ) {
+                                                    currencyOptions.forEach { curr ->
+                                                        DropdownMenuItem(
+                                                            text = { Text(curr, fontSize = 11.sp) },
+                                                            onClick = {
+                                                                entryLines = entryLines.toMutableList().apply {
+                                                                    this[index] = line.copy(currencyCode = curr)
+                                                                }
+                                                                expandedCurrency = false
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            
+                                            OutlinedTextField(
+                                                value = line.exchangeRate,
+                                                onValueChange = { valText ->
+                                                    entryLines = entryLines.toMutableList().apply {
+                                                        this[index] = line.copy(exchangeRate = valText)
+                                                    }
+                                                },
+                                                label = { Text("سعر الصرف", fontSize = 10.sp) },
                                                 modifier = Modifier.weight(1f),
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1439,8 +1508,8 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                             }
                         }
 
-                        val totalDebit = entryLines.sumOf { it.debit.toDoubleOrNull() ?: 0.0 }
-                        val totalCredit = entryLines.sumOf { it.credit.toDoubleOrNull() ?: 0.0 }
+                        val totalDebit = entryLines.sumOf { (it.debit.toDoubleOrNull() ?: 0.0) * (it.exchangeRate.toDoubleOrNull() ?: 1.0) }
+                        val totalCredit = entryLines.sumOf { (it.credit.toDoubleOrNull() ?: 0.0) * (it.exchangeRate.toDoubleOrNull() ?: 1.0) }
                         val balanceDiff = totalDebit - totalCredit
 
                         Card(
@@ -1453,8 +1522,8 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                                     .padding(8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("إجمالي المدين: ${totalDebit} ر.ي", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                Text("إجمالي الدائن: ${totalCredit} ر.ي", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                                Text("إجمالي المدين (محلي): ${totalDebit} ر.ي", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                Text("إجمالي الدائن (محلي): ${totalCredit} ر.ي", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
                             }
                         }
 
@@ -1474,11 +1543,11 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                                 entryError = "يرجى تحديد حساب محاسبي لكل سطر من القيد"
                                 return@Button
                             }
-                            val totalDebit = entryLines.sumOf { it.debit.toDoubleOrNull() ?: 0.0 }
-                            val totalCredit = entryLines.sumOf { it.credit.toDoubleOrNull() ?: 0.0 }
+                            val totalDebit = entryLines.sumOf { (it.debit.toDoubleOrNull() ?: 0.0) * (it.exchangeRate.toDoubleOrNull() ?: 1.0) }
+                            val totalCredit = entryLines.sumOf { (it.credit.toDoubleOrNull() ?: 0.0) * (it.exchangeRate.toDoubleOrNull() ?: 1.0) }
                             val balanceDiff = totalDebit - totalCredit
                             if (balanceDiff != 0.0 || totalDebit <= 0.0) {
-                                entryError = "القيد غير متوازن! يجب تساوى إجمالي المدين والدائن"
+                                entryError = "القيد غير متوازن! يجب تساوى إجمالي المدين والدائن بالعملة المحلية (بعد المصارفة)"
                                 return@Button
                             }
 
@@ -1502,7 +1571,9 @@ fun AccountingScreen(viewModel: AppViewModel, initialTab: Int = 0, onBack: () ->
                                     accountId = line.accountId!!,
                                     debit = line.debit.toDoubleOrNull() ?: 0.0,
                                     credit = line.credit.toDoubleOrNull() ?: 0.0,
-                                    description = line.description
+                                    description = line.description,
+                                    currencyCode = line.currencyCode,
+                                    exchangeRate = line.exchangeRate.toDoubleOrNull() ?: 1.0
                                 )
                             }
 

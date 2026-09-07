@@ -416,15 +416,15 @@ class AppRepository(context: Context) {
             val lineWithId = line.copy(journalEntryId = entryId)
             journalDao.insertEntryLine(lineWithId)
             
-            // Update account balance
+            // Update account balance (using local base currency equivalent)
             val account = accountDao.getAccountById(line.accountId)
             account?.let { acc ->
-                val debitDiff = line.debit
-                val creditDiff = line.credit
+                val baseDebit = line.debit * line.exchangeRate
+                val baseCredit = line.credit * line.exchangeRate
                 val change = when (acc.type) {
-                    "ASSETS", "EXPENSES" -> debitDiff - creditDiff
-                    "LIABILITIES", "EQUITY", "REVENUE" -> creditDiff - debitDiff
-                    else -> debitDiff - creditDiff
+                    "ASSETS", "EXPENSES" -> baseDebit - baseCredit
+                    "LIABILITIES", "EQUITY", "REVENUE" -> baseCredit - baseDebit
+                    else -> baseDebit - baseCredit
                 }
                 accountDao.updateAccount(acc.copy(balance = acc.balance + change))
             }
@@ -1099,10 +1099,13 @@ class AppRepository(context: Context) {
         )
 
         val safeAcc = accountDao.getAccountById(rem.safeAccountId) ?: accountDao.getAccountByCode("1101")
-        val transferCompanyAcc = accountDao.getAccountById(rem.accountId) ?: accountDao.getAccountByCode("2101")
-        
-        var commAcc = accountDao.getAccountByCode("4102")
-        if (commAcc == null) {
+        val transferCompanyAcc = accountDao.getAccountById(rem.accountId) ?:    suspend fun getAccountByCode(code: String): Account? {
+        return database.accountDao().getAccountByCode(code)
+    }
+
+    suspend fun getMaxAccountCodeByType(type: String): Int? {
+        return database.accountDao().getMaxAccountCodeByType(type)
+    }    if (commAcc == null) {
             val revenueParent = accountDao.getAccountByCode("4")
             var newCommAcc = Account(code = "4102", name = "إيرادات العمولات", type = "REVENUE", parentId = revenueParent?.id)
             val insertedId = accountDao.insertAccount(newCommAcc)
@@ -1505,6 +1508,46 @@ class AppRepository(context: Context) {
             }
         }
     }
+
+    suspend fun getAccountByCode(code: String): Account? {
+        return accountDao.getAccountByCode(code)
+    }
+
+    suspend fun getMaxAccountCodeByType(type: String): Int? {
+        return accountDao.getMaxAccountCodeByType(type)
+    }
+
+    fun getItemMovements(itemId: Long?): Flow<List<com.example.data.model.ItemMovementDto>> {
+        return invoiceDao.getItemTransactions(itemId).map { rawList ->
+            val balances = mutableMapOf<Long, Double>()
+            rawList.map { raw ->
+                val isInward = raw.invoiceType in listOf("PURCHASE_CASH", "PURCHASE_CREDIT", "SALE_RETURN", "STOCK_SUPPLY")
+                val isOutward = raw.invoiceType in listOf("SALE_CASH", "SALE_CREDIT", "PURCHASE_RETURN", "STOCK_ISSUE")
+                
+                val inwardQty = if (isInward) raw.quantity else 0.0
+                val outwardQty = if (isOutward) raw.quantity else 0.0
+                
+                val currentBalance = (balances[raw.itemId] ?: 0.0) + inwardQty - outwardQty
+                balances[raw.itemId] = currentBalance
+                
+                val profitMargin = if (isOutward && raw.invoiceType.startsWith("SALE")) {
+                    if (raw.purchasePrice > 0) ((raw.unitPrice - raw.purchasePrice) / raw.purchasePrice) * 100 else 100.0
+                } else null
+
+                com.example.data.model.ItemMovementDto(
+                    timestamp = raw.timestamp,
+                    invoiceNumber = raw.invoiceNumber,
+                    invoiceType = raw.invoiceType,
+                    itemName = raw.itemName,
+                    itemId = raw.itemId,
+                    inwardQty = inwardQty,
+                    outwardQty = outwardQty,
+                    unitPrice = raw.unitPrice,
+                    costPrice = raw.purchasePrice,
+                    balance = currentBalance,
+                    profitMargin = profitMargin
+                )
+            }
+        }
+    }
 }
-
-

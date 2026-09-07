@@ -69,12 +69,16 @@ fun PartnersScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            TabRow(selectedTabIndex = selectedTab) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                edgePadding = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title, fontWeight = FontWeight.Bold) }
+                        text = { Text(title, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                 }
             }

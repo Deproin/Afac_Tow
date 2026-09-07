@@ -43,11 +43,13 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val warehouses by viewModel.warehouses.collectAsState()
     val itemStocks by viewModel.itemStocks.collectAsState()
     val itemUnits by viewModel.itemUnits.collectAsState()
+    val itemMovements by viewModel.itemMovements.collectAsState()
+    val selectedMovementItem by viewModel.selectedMovementItem.collectAsState()
 
     val tempUnits = remember { mutableStateListOf<ItemUnit>() }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("الأصناف والمخزون", "المستودعات والمخازن", "الجرد والتسويات")
+    val tabs = listOf("الأصناف والمخزون", "المستودعات والمخازن", "الجرد والتسويات", "حركة الأصناف")
 
     var showAddItemDialog by remember { mutableStateOf(false) }
     var selectedItemForEdit by remember { mutableStateOf<Item?>(null) }
@@ -289,72 +291,7 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                             shape = RoundedCornerShape(12.dp)
                         )
 
-                        // Excel & Stock Operations Quick Bar
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = {
-                                    supplyTargetItem = items.firstOrNull()
-                                    supplyWarehouse = warehouses.firstOrNull()
-                                    supplyQtyInput = "10.0"
-                                    supplyCostInput = ""
-                                    supplyNotesInput = ""
-                                    showStockSupplyDialog = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(Icons.Default.AddBusiness, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("توريد مخزني +", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
 
-                            Button(
-                                onClick = {
-                                    showStockIssueDialog = true
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("صرف مخزني -", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-
-                            OutlinedButton(
-                                onClick = { viewModel.exportItemsToCsv(context) },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("تصدير", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
-                                onClick = { csvPickerLauncher.launch("*/*") },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("استيراد", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            TextButton(
-                                onClick = { viewModel.generateItemsTemplate(context) },
-                                contentPadding = PaddingValues(horizontal = 4.dp)
-                            ) {
-                                Text("نموذج", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                            }
-                        }
 
                         // Category Chips Filter
                         val allCategoryFilters = listOf("الكل") + PRESET_CATEGORIES
@@ -373,6 +310,7 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
 
                         // Filtered Items List
                         val filteredItems = items.filter { item ->
+                            item.currentQuantity > 0 &&
                             (selectedCategoryFilter == "الكل" || item.category == selectedCategoryFilter) &&
                                     (item.name.contains(searchText, ignoreCase = true) ||
                                             item.code.contains(searchText, ignoreCase = true) ||
@@ -552,6 +490,97 @@ fun InventoryScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                                             shape = RoundedCornerShape(8.dp)
                                         ) {
                                             Text("جرد وتسوية", color = Color.White, fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                }
+                3 -> {
+                    // TAB 3: ITEM MOVEMENTS REPORT
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("تقرير حركة الأصناف", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+
+                        DropdownSelector(
+                            options = listOf("جميع الأصناف") + items.map { it.name },
+                            selectedOption = items.firstOrNull { it.id == selectedMovementItem }?.name ?: "جميع الأصناف",
+                            onOptionSelected = { selectedName ->
+                                if (selectedName == "جميع الأصناف") {
+                                    viewModel.setSelectedMovementItem(null)
+                                } else {
+                                    val item = items.firstOrNull { it.name == selectedName }
+                                    viewModel.setSelectedMovementItem(item?.id)
+                                }
+                            }
+                        )
+                        
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(itemMovements.size) { index ->
+                                val movement = itemMovements[index]
+                                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+                                val dateStr = sdf.format(java.util.Date(movement.timestamp))
+                                
+                                val typeColor = when {
+                                    movement.inwardQty > 0 -> Color(0xFF2E7D32) // Green for inward
+                                    movement.outwardQty > 0 -> Color(0xFFC62828) // Red for outward
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                                
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(movement.itemName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text(dateStr, fontSize = 11.sp, color = Color.Gray)
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("مستند: ${movement.invoiceNumber}", fontSize = 12.sp, color = Color.Gray)
+                                            Text(
+                                                text = if (movement.inwardQty > 0) "+ وارد (${movement.inwardQty})" else "- منصرف (${movement.outwardQty})",
+                                                color = typeColor,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("سعر التكلفة: ${String.format("%.2f", movement.costPrice)}", fontSize = 12.sp)
+                                            if (movement.outwardQty > 0) {
+                                                Text("سعر البيع: ${String.format("%.2f", movement.unitPrice)}", fontSize = 12.sp)
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("الرصيد المتراكم: ${String.format("%.2f", movement.balance)}", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            if (movement.profitMargin != null) {
+                                                val marginColor = if (movement.profitMargin >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                                Text("هامش الربح: ${String.format("%.1f", movement.profitMargin)}%", color = marginColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            }
                                         }
                                     }
                                 }
@@ -1215,26 +1244,30 @@ fun ItemFormDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 // Form Tab Selector
-                TabRow(selectedTabIndex = dialogTab) {
+                ScrollableTabRow(
+                    selectedTabIndex = dialogTab,
+                    edgePadding = 0.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Tab(
                         selected = dialogTab == 0,
                         onClick = { dialogTab = 0 },
-                        text = { Text("الرئيسية", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("الرئيسية", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                     Tab(
                         selected = dialogTab == 1,
                         onClick = { dialogTab = 1 },
-                        text = { Text("الأسعار والربح", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("الأسعار والربح", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                     Tab(
                         selected = dialogTab == 2,
                         onClick = { dialogTab = 2 },
-                        text = { Text("المخزون والوحدات", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("المخزون والوحدات", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                     Tab(
                         selected = dialogTab == 3,
                         onClick = { dialogTab = 3 },
-                        text = { Text("التفاصيل", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("التفاصيل", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                 }
             }
@@ -1424,7 +1457,7 @@ fun ItemFormDialog(
 
                     2 -> {
                         // TAB 3: INVENTORY & MULTI-UNITS
-                        Text("الوحدة الأساسية للصنف (اختر من القائمة بدون كتابة):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("الوحدة الأساسية للصنف (اختر أو اكتب وحدة جديدة):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         DropdownSelector(
                             options = presetUnits,
                             selectedOption = unit,
@@ -1572,38 +1605,46 @@ fun DropdownSelector(
     onOptionSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var customInput by remember { mutableStateOf("") }
-    var isCustom by remember { mutableStateOf(selectedOption !in options && selectedOption.isNotEmpty()) }
+    var text by remember(selectedOption) { mutableStateOf(selectedOption) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (isCustom) "تخصيص: $selectedOption" else selectedOption,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                onOptionSelected(it)
+                expanded = true
+            },
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                        contentDescription = "قائمة الخيارات"
                     )
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "سهم الاختيار")
                 }
-            }
+            },
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        )
 
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth(0.85f)
-            ) {
-                options.forEach { item ->
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth(0.85f)
+        ) {
+            val filteredOptions = if (text.isEmpty()) options else options.filter { it.contains(text, ignoreCase = true) }
+            
+            if (filteredOptions.isEmpty() && text.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("إضافة كخيار جديد: $text", color = MaterialTheme.colorScheme.primary) },
+                    onClick = {
+                        onOptionSelected(text)
+                        expanded = false
+                    }
+                )
+            } else {
+                filteredOptions.forEach { item ->
                     DropdownMenuItem(
                         text = {
                             Row(
@@ -1618,35 +1659,13 @@ fun DropdownSelector(
                             }
                         },
                         onClick = {
-                            isCustom = false
+                            text = item
                             onOptionSelected(item)
                             expanded = false
                         }
                     )
                 }
-                Divider()
-                DropdownMenuItem(
-                    text = { Text("✏️ إدخال قيمة مخصصة أخرى...", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
-                    onClick = {
-                        isCustom = true
-                        expanded = false
-                    }
-                )
             }
-        }
-
-        if (isCustom) {
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = customInput,
-                onValueChange = {
-                    customInput = it
-                    onOptionSelected(it)
-                },
-                label = { Text("اكتب القيمة المخصصة يدوياً") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
         }
     }
 }

@@ -63,16 +63,18 @@ fun RecycleBinScreen(
                 .padding(padding)
                 .background(Color(0xFFF5F5F5))
         ) {
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
                 containerColor = Color.White,
-                contentColor = Color(0xFFF44336)
+                contentColor = Color(0xFFF44336),
+                edgePadding = 0.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTabIndex == index,
                         onClick = { selectedTabIndex = index },
-                        text = { Text(title, fontWeight = FontWeight.Bold) }
+                        text = { Text(title, fontWeight = FontWeight.Bold, maxLines = 1) }
                     )
                 }
             }

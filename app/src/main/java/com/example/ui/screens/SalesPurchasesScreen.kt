@@ -1292,116 +1292,30 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("المجموع الفرعي:", fontSize = 12.sp)
-                        Text("$subTotal ر.ي", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
+                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Row 1: Subtotal & Currency
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("الإجمالي الفرعي: $subTotal", fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
-                    // Freight & Shipping expenses (for Purchases)
-                    if (!isSale && !isReturn) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("مصاريف النقل والشحن (+):", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            OutlinedTextField(
-                                value = shippingExpensesInput,
-                                onValueChange = { shippingExpensesInput = it },
-                                modifier = Modifier.width(110.dp),
-                                singleLine = true,
-                                textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                            )
-                        }
-                    }
-
-                    // Discount row (Fixed vs Percent)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                        // Currency
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("الخصم:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            FilterChip(
-                                selected = discountType == "FIXED",
-                                onClick = { discountType = "FIXED" },
-                                label = { Text("مبلغ", fontSize = 10.sp) }
-                            )
-                            FilterChip(
-                                selected = discountType == "PERCENT",
-                                onClick = { discountType = "PERCENT" },
-                                label = { Text("%", fontSize = 10.sp) }
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = discountInput,
-                            onValueChange = { discountInput = it },
-                            modifier = Modifier.width(110.dp),
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    }
-
-
-                    // Tax Configuration row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("الضريبة:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            FilterChip(
-                                selected = taxType == "EXEMPT",
-                                onClick = { taxType = "EXEMPT" },
-                                label = { Text("بدون ضريبة (0%)", fontSize = 9.sp) }
-                            )
-                            FilterChip(
-                                selected = taxType == "EXCLUSIVE",
-                                onClick = { taxType = "EXCLUSIVE" },
-                                label = { Text("غير شاملة (15%)", fontSize = 9.sp) }
-                            )
-                            FilterChip(
-                                selected = taxType == "INCLUSIVE",
-                                onClick = { taxType = "INCLUSIVE" },
-                                label = { Text("شاملة (15%)", fontSize = 9.sp) }
-                            )
-                        }
-
-                        Text(String.format("%.2f", taxValue) + " $selectedCurrencyCode", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Currency & Exchange Rate row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("عملة المستند وسعر الصرف:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("العملة:", fontSize = 11.sp)
                             var expandedCurrDropdown by remember { mutableStateOf(false) }
                             val availableCurrencies = listOf("ر.ي", "ر.س", "$")
                             Box {
                                 OutlinedButton(
                                     onClick = { expandedCurrDropdown = true },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    shape = RoundedCornerShape(8.dp)
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Text(selectedCurrencyCode, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "عملة", modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "", modifier = Modifier.size(14.dp))
                                 }
-                                DropdownMenu(
-                                    expanded = expandedCurrDropdown,
-                                    onDismissRequest = { expandedCurrDropdown = false }
-                                ) {
+                                DropdownMenu(expanded = expandedCurrDropdown, onDismissRequest = { expandedCurrDropdown = false }) {
                                     availableCurrencies.forEach { currCode ->
                                         DropdownMenuItem(
-                                            text = { Text(when (currCode) { "ر.ي" -> "الريال اليمني (ر.ي)" "ر.س" -> "الريال السعودي (ر.س)" else -> "الدولار الأمريكي ($)" }) },
+                                            text = { Text(currCode) },
                                             onClick = {
                                                 selectedCurrencyCode = currCode
                                                 if (currCode == "ر.ي") exchangeRateInput = "1.0"
@@ -1411,17 +1325,87 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                                     }
                                 }
                             }
-
                             if (selectedCurrencyCode != "ر.ي") {
                                 OutlinedTextField(
                                     value = exchangeRateInput,
                                     onValueChange = { exchangeRateInput = it },
-                                    label = { Text("سعر الصرف", fontSize = 9.sp) },
-                                    modifier = Modifier.width(85.dp),
+                                    modifier = Modifier.width(55.dp).height(28.dp),
+                                    textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                 )
                             }
+                        }
+                    }
+
+                    // Row 2: Discount & Tax
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        // Discount
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("الخصم:", fontSize = 11.sp)
+                            OutlinedTextField(
+                                value = discountInput,
+                                onValueChange = { discountInput = it },
+                                modifier = Modifier.width(55.dp).height(28.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            var expandedDiscDropdown by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(
+                                    onClick = { expandedDiscDropdown = true },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(if (discountType == "PERCENT") "%" else "مبلغ", fontSize = 10.sp)
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "", modifier = Modifier.size(12.dp))
+                                }
+                                DropdownMenu(expanded = expandedDiscDropdown, onDismissRequest = { expandedDiscDropdown = false }) {
+                                    DropdownMenuItem(text = { Text("نسبة %") }, onClick = { discountType = "PERCENT"; expandedDiscDropdown = false })
+                                    DropdownMenuItem(text = { Text("مبلغ ثابت") }, onClick = { discountType = "FIXED"; expandedDiscDropdown = false })
+                                }
+                            }
+                        }
+
+                        // Tax
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("الضريبة:", fontSize = 11.sp)
+                            var expandedTaxDropdown by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(
+                                    onClick = { expandedTaxDropdown = true },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    val label = when(taxType) { "EXEMPT" -> "معفاه"; "INCLUSIVE" -> "شاملة"; else -> "تُضاف" }
+                                    Text(label, fontSize = 10.sp)
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "", modifier = Modifier.size(12.dp))
+                                }
+                                DropdownMenu(expanded = expandedTaxDropdown, onDismissRequest = { expandedTaxDropdown = false }) {
+                                    DropdownMenuItem(text = { Text("بدون ضريبة") }, onClick = { taxType = "EXEMPT"; expandedTaxDropdown = false })
+                                    DropdownMenuItem(text = { Text("غير شاملة (15%)") }, onClick = { taxType = "EXCLUSIVE"; expandedTaxDropdown = false })
+                                    DropdownMenuItem(text = { Text("شاملة (15%)") }, onClick = { taxType = "INCLUSIVE"; expandedTaxDropdown = false })
+                                }
+                            }
+                            Text(String.format("%.1f", taxValue), fontSize = 10.sp)
+                        }
+                    }
+
+                    // Row 3: Shipping
+                    if (!isSale && !isReturn) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically) {
+                            Text("مصاريف النقل والشحن (+):", fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
+                            OutlinedTextField(
+                                value = shippingExpensesInput,
+                                onValueChange = { shippingExpensesInput = it },
+                                modifier = Modifier.width(70.dp).height(28.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
                         }
                     }
 
@@ -1432,8 +1416,8 @@ fun SalesPurchasesScreen(viewModel: AppViewModel, mode: String, onBack: () -> Un
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (isReturn) "إجمالي مبلغ المرتجع النهائي:" else "الإجمالي الكلي للفاتورة:", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Text("${String.format("%.2f", invoiceTotal)} $selectedCurrencyCode", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(if (isReturn) "إجمالي مبلغ المرتجع:" else "الإجمالي الكلي للفاتورة:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("${String.format("%.2f", invoiceTotal)} $selectedCurrencyCode", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

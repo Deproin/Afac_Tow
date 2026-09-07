@@ -103,12 +103,16 @@ fun UserManagementScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            TabRow(selectedTabIndex = selectedTab) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                edgePadding = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                        text = { Text(title, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1) }
                     )
                 }
             }

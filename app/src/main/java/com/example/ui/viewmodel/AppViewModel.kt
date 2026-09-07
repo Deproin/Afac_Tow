@@ -193,6 +193,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val itemStocks = repository.itemStockDao.getAllItemStocks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _selectedMovementItem = MutableStateFlow<Long?>(null)
+    val selectedMovementItem: StateFlow<Long?> = _selectedMovementItem.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val itemMovements = _selectedMovementItem.flatMapLatest { itemId ->
+        repository.getItemMovements(itemId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setSelectedMovementItem(itemId: Long?) {
+        _selectedMovementItem.value = itemId
+    }
     fun getStocksForItem(itemId: Long): Flow<List<ItemStock>> {
         return repository.itemStockDao.getStocksForItem(itemId)
     }
@@ -1048,6 +1059,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun updateAccount(account: Account) = viewModelScope.launch {
         repository.accountDao.updateAccount(account)
         repository.logOperation("تعديل حساب", "accounts", "تم تعديل الحساب ${account.name}")
+    }
+
+    suspend fun getMaxAccountCodeByType(type: String): Int? {
+        return repository.getMaxAccountCodeByType(type)
     }
 
     fun deleteAccount(account: Account) = viewModelScope.launch {

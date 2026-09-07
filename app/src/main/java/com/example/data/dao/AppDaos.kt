@@ -245,6 +245,25 @@ interface InvoiceDao {
 
     @Query("SELECT COUNT(*) FROM invoices WHERE isDeleted = 0")
     fun countInvoicesFlow(): Flow<Int>
+
+    @Query("""
+        SELECT 
+            inv.timestamp, 
+            inv.type AS invoiceType,
+            inv.invoiceNumber,
+            item.name AS itemName,
+            invItem.itemId,
+            invItem.quantity,
+            invItem.unitPrice,
+            item.purchasePrice
+        FROM invoice_items AS invItem
+        INNER JOIN invoices AS inv ON inv.id = invItem.invoiceId
+        INNER JOIN items AS item ON item.id = invItem.itemId
+        WHERE inv.isDeleted = 0 AND invItem.isDeleted = 0
+        AND (:itemId IS NULL OR invItem.itemId = :itemId)
+        ORDER BY inv.timestamp ASC
+    """)
+    fun getItemTransactions(itemId: Long?): Flow<List<com.example.data.model.ItemTransactionRaw>>
 }
 
 @Dao
@@ -257,6 +276,9 @@ interface AccountDao {
 
     @Query("SELECT * FROM accounts WHERE code = :code AND isDeleted = 0 LIMIT 1")
     suspend fun getAccountByCode(code: String): Account?
+
+    @Query("SELECT MAX(CAST(code AS INTEGER)) FROM accounts WHERE type = :type AND isDeleted = 0 AND CAST(code AS INTEGER) > 0")
+    suspend fun getMaxAccountCodeByType(type: String): Int?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: Account): Long
